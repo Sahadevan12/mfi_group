@@ -1,0 +1,53 @@
+# Dependencies
+node_modules/
+*/node_modules/
+
+# Build output
+dist/
+build/
+*/dist/
+*/build/
+
+# Environment files (contains passwords/secrets)
+.env
+.env.local
+.env.production
+backend/.env
+frontend/.env
+
+# Database files
+*.db
+*.db-shm
+*.db-wal
+backend/data/
+
+# Token / auth files
+*.json
+!package.json
+!package-lock.json
+!tsconfig*.json
+!vite.config*
+!tailwind.config*
+!postcss.config*
+!frontend/public/manifest.json
+!.claude/launch.json
+
+# Logs
+*.log
+npm-debug.log*
+logs/
+
+# Uploads & Backups (large files)
+backend/uploads/
+backend/backups/
+
+# Claude Code internal
+.claude/settings*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
