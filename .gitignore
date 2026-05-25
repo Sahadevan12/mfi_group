@@ -30,6 +30,7 @@ backend/data/
 !tailwind.config*
 !postcss.config*
 !frontend/public/manifest.json
+!backend/public/manifest.json
 !.claude/launch.json
 
 # Logs
