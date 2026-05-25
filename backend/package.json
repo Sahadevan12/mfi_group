@@ -5,7 +5,7 @@
   "main": "dist/index.js",
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
-    "build": "npx tsc",
+    "build": "./node_modules/.bin/tsc",
     "build:prod": "cd ../frontend && npm install && npm run build && cd ../backend && mkdir -p public && cp -r ../frontend/dist/. public/ && npx tsc",
     "start": "node dist/index.js",
     "seed": "ts-node-dev --transpile-only src/seed.ts",
