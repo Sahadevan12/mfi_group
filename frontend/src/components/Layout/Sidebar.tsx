@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import {
   LayoutDashboard, Building2, Users2, UserCircle, CreditCard,
   Wallet, Users, BarChart3, Receipt, Bell, Settings, LogOut, X,
-  MessageSquare, Database, Shield
+  Database, Shield
 } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import client from '../../api/client';
@@ -45,7 +45,6 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
     { to: '/reports', icon: BarChart3, label: 'Reports' },
     { to: '/expenses', icon: Receipt, label: 'Expenses', adminOnly: true },
     { to: '/notifications', icon: Bell, label: 'Notifications', badge: unreadCount },
-    { to: '/sms-settings', icon: MessageSquare, label: 'SMS Settings', adminOnly: true },
     { to: '/backup', icon: Database, label: 'Backup', adminOnly: true },
     { to: '/settings', icon: Settings, label: 'Settings' },
   ];

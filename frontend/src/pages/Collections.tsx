@@ -164,89 +164,63 @@ export default function Collections() {
     const win = window.open('', '_blank');
     if (!win) return;
     win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"/>
-<title>Group Collection Bill – ${groupName}</title>
+<title>Group Collection Receipt – ${groupName}</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:Arial,sans-serif;background:#e2e8f0;padding:24px}
-.receipt{
-  background:#fff;border-radius:14px;overflow:hidden;
-  max-width:520px;margin:0 auto;
-  box-shadow:0 4px 24px rgba(0,0,0,.13);
-}
-/* Dark header */
-.hdr{background:#1a2744;color:#fff;text-align:center;padding:20px 16px 18px}
-.org{font-size:18px;font-weight:800;letter-spacing:.3px}
-.sub{font-size:11px;color:#60a5fa;margin-top:3px}
-.confirmed{margin-top:12px;font-size:13px;font-weight:600;color:#34d399;
-  display:flex;align-items:center;justify-content:center;gap:6px}
-
-/* Batch number banner */
-.rno-banner{background:#fef9f0;border-bottom:1px solid #f3e8d0;
-  text-align:center;padding:10px 16px}
-.rno-label{font-size:11px;color:#94a3b8}
-.rno{font-size:15px;font-weight:800;font-family:monospace;color:#1e293b;letter-spacing:.5px;margin-top:2px}
-
-/* Detail rows */
-.details{padding:14px 20px}
-.row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #f1f5f9}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f1f5f9;min-height:100vh;display:flex;justify-content:center;align-items:flex-start;padding:24px 16px}
+.receipt{background:#fff;border-radius:14px;overflow:hidden;width:100%;max-width:400px;box-shadow:0 4px 24px rgba(0,0,0,.13)}
+/* Header */
+.hdr{background:#0f1f3d;color:#fff;text-align:center;padding:20px 16px}
+.org{font-size:19px;font-weight:800;letter-spacing:.2px}
+.sub{font-size:11px;color:#94a3b8;margin-top:3px}
+.confirmed{margin-top:12px;display:flex;align-items:center;justify-content:center;gap:6px;font-size:13px;font-weight:600;color:#34d399}
+.confirmed svg{flex-shrink:0}
+/* Batch banner */
+.batch{background:#fefce8;border-bottom:1px solid #fde68a;text-align:center;padding:10px 16px}
+.batch-lbl{font-size:11px;color:#94a3b8}
+.batch-no{font-size:15px;font-weight:800;color:#1e293b;font-family:monospace;letter-spacing:.5px;margin-top:2px}
+/* Details */
+.details{padding:14px 16px}
+.row{display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid #f8fafc}
 .row:last-child{border-bottom:none}
 .lbl{font-size:12px;color:#64748b}
-.val{font-size:13px;font-weight:600;color:#1e293b;text-align:right}
-
-/* Customer table */
-.dash{border-top:1px dashed #cbd5e1;margin:0 20px}
-.tbl-wrap{padding:12px 20px 16px}
-.tbl-title{font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;
-  letter-spacing:.8px;margin-bottom:8px}
-table{width:100%;border-collapse:collapse;font-size:12px}
-thead tr{background:#1a2744;color:#fff}
-th{padding:7px 10px;text-align:left;font-size:11px;font-weight:600}
-td{padding:7px 10px;border-bottom:1px solid #f1f5f9;vertical-align:top}
-tbody tr:last-child td{border-bottom:none}
-tbody tr:nth-child(even){background:#f8fafc}
-
-/* Grand total bar */
-.total-bar{
-  display:flex;justify-content:space-between;align-items:center;
-  background:#1a2744;color:#fff;
-  margin:0 20px 20px;border-radius:8px;padding:12px 16px;
-  font-size:15px;font-weight:700;
-}
-
+.val{font-size:13px;font-weight:600;color:#1e293b;text-align:right;max-width:60%}
+/* Divider */
+.div{border:none;border-top:1px dashed #cbd5e1;margin:0 16px}
+/* Amount */
+.amt{padding:14px 16px}
+.total-bar{display:flex;justify-content:space-between;align-items:center;background:#0f1f3d;color:#fff;border-radius:9px;padding:13px 16px;margin-top:4px}
+.total-bar .tl{font-size:14px;font-weight:600}
+.total-bar .tv{font-size:19px;font-weight:800}
 /* Footer */
-.foot{text-align:center;padding:12px 16px 18px;line-height:1.8;border-top:1px dashed #e2e8f0}
-.foot p{font-size:11px;color:#94a3b8}
-.foot p:first-child{color:#475569;font-size:12px}
+.foot{padding:12px 16px 20px;text-align:center;border-top:1px dashed #cbd5e1;margin:0 16px}
+.foot p{font-size:11px;color:#94a3b8;line-height:1.9}
+.foot .by{font-size:12px;color:#475569}
 .foot strong{color:#334155}
-
 @media print{
-  body{background:#fff;padding:0}
+  body{background:#fff;padding:0;display:block}
   .receipt{box-shadow:none;border-radius:0;max-width:100%}
-  @page{margin:10mm}
+  @page{size:A5 portrait;margin:8mm}
 }
 </style></head><body>
 <div class="receipt">
 
-  <!-- Header -->
   <div class="hdr">
     <div class="org">SPS Group of Foundation</div>
     <div class="sub">Microfinance Management</div>
     <div class="confirmed">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="2.5"
-        stroke-linecap="round" stroke-linejoin="round">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
         <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
       </svg>
       Payment Confirmed
     </div>
   </div>
 
-  <!-- Batch number -->
-  <div class="rno-banner">
-    <div class="rno-label">Batch Number</div>
-    <div class="rno">${batchNo}</div>
+  <div class="batch">
+    <div class="batch-lbl">Batch Number</div>
+    <div class="batch-no">${batchNo}</div>
   </div>
 
-  <!-- Group details -->
   <div class="details">
     <div class="row"><span class="lbl">No. of Members</span><span class="val">${rows.length}</span></div>
     <div class="row"><span class="lbl">Group</span><span class="val">${groupName}</span></div>
@@ -256,32 +230,17 @@ tbody tr:nth-child(even){background:#f8fafc}
     <div class="row"><span class="lbl">Payment Mode</span><span class="val">${modeLabel[mode] || mode.toUpperCase()}</span></div>
   </div>
 
-  <div class="dash"></div>
+  <hr class="div"/>
 
-  <!-- Customer table -->
-  <div class="tbl-wrap">
-    <div class="tbl-title">Member Collections</div>
-    <table>
-      <thead><tr>
-        <th style="width:32px">#</th>
-        <th>Customer</th>
-        <th>Loan No.</th>
-        <th style="text-align:right">Amount</th>
-        ${grandPenalty > 0 ? '<th style="text-align:right">Penalty</th>' : ''}
-      </tr></thead>
-      <tbody>${tableRows}</tbody>
-    </table>
+  <div class="amt">
+    <div class="total-bar">
+      <span class="tl">Total Paid</span>
+      <span class="tv">₹ ${(grandTotal + grandPenalty).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+    </div>
   </div>
 
-  <!-- Grand total -->
-  <div class="total-bar">
-    <span>Total Paid</span>
-    <span>₹ ${(grandTotal + grandPenalty).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-  </div>
-
-  <!-- Footer -->
   <div class="foot">
-    <p>Collected by: <strong>${staffName}</strong></p>
+    <p class="by">Collected by: <strong>${staffName}</strong></p>
     <p>Thank you for your timely payment!</p>
     <p>This is a computer-generated receipt.</p>
   </div>
@@ -289,7 +248,13 @@ tbody tr:nth-child(even){background:#f8fafc}
 </div>
 </body></html>`);
     win.document.close();
-    setTimeout(() => { win.focus(); win.print(); }, 400);
+    setTimeout(() => {
+      win.focus();
+      // Resize window to receipt width so print preview matches content
+      const h = win.document.body.scrollHeight + 20;
+      win.resizeTo(320, Math.min(h, 800));
+      win.print();
+    }, 400);
   };
 
   const bulkCollect = useMutation({

@@ -5,15 +5,28 @@ import client from '../api/client';
 import { PageLoader } from '../components/ui/Spinner';
 import { Download, FileSpreadsheet, FileText } from 'lucide-react';
 import { exportPDF, exportExcel } from '../utils/exportUtils';
+import { useAuthStore } from '../store/authStore';
 
-const today = new Date().toISOString().split('T')[0];
+// Format date in LOCAL timezone (avoids UTC-shift bug for IST)
+function localDate(d: Date) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+const today = localDate(new Date());
 const monthStart = today.substring(0, 7) + '-01';
 
-// Sunday of current week
+// Most-recent completed week's Sunday
+// If today IS Sunday → go back 7 days (show last full week)
+// If today is Mon-Sat → go back to this week's Sunday (show current week)
 function getWeekStart() {
   const d = new Date();
-  d.setDate(d.getDate() - d.getDay());
-  return d.toISOString().split('T')[0];
+  const dow = d.getDay(); // 0 = Sunday
+  const daysBack = dow === 0 ? 7 : dow;
+  d.setDate(d.getDate() - daysBack);
+  return localDate(d);
 }
 
 type ReportTab = 'daily' | 'weekly' | 'monthly' | 'pending' | 'defaulters' | 'center' | 'group' | 'agent' | 'pl' | 'cashbook';
@@ -37,12 +50,16 @@ function DateRangeFilter({ startDate, endDate, onStart, onEnd }: { startDate: st
 }
 
 export default function Reports() {
+  const { user } = useAuthStore();
+  const isAdmin = user?.role === 'admin';
   const [tab, setTab] = useState<ReportTab>('daily');
   const [date, setDate] = useState(today);
   const [weekStart, setWeekStart] = useState(getWeekStart());
   const [month, setMonth] = useState(today.substring(0, 7));
   const [startDate, setStartDate] = useState(monthStart);
   const [endDate, setEndDate] = useState(today);
+  const [reportCenterId, setReportCenterId] = useState('');
+  const [reportGroupId, setReportGroupId] = useState('');
 
   const dailyReport = useQuery({
     queryKey: ['report-daily', date],
@@ -77,14 +94,18 @@ export default function Reports() {
   });
 
   const centerReport = useQuery({
-    queryKey: ['report-center', startDate, endDate],
-    queryFn: () => client.get('/reports/center-wise', { params: { start_date: startDate, end_date: endDate } }).then(r => r.data),
+    queryKey: ['report-center', startDate, endDate, reportCenterId],
+    queryFn: () => client.get('/reports/center-wise', {
+      params: { start_date: startDate, end_date: endDate, ...(reportCenterId ? { center_id: reportCenterId } : {}) }
+    }).then(r => r.data),
     enabled: tab === 'center',
   });
 
   const groupReport = useQuery({
-    queryKey: ['report-group', startDate, endDate],
-    queryFn: () => client.get('/reports/group-wise', { params: { start_date: startDate, end_date: endDate } }).then(r => r.data),
+    queryKey: ['report-group', startDate, endDate, reportCenterId, reportGroupId],
+    queryFn: () => client.get('/reports/group-wise', {
+      params: { start_date: startDate, end_date: endDate, ...(reportCenterId ? { center_id: reportCenterId } : {}), ...(reportGroupId ? { group_id: reportGroupId } : {}) }
+    }).then(r => r.data),
     enabled: tab === 'group',
   });
 
@@ -106,18 +127,30 @@ export default function Reports() {
     enabled: tab === 'cashbook',
   });
 
-  const tabs: { key: ReportTab; label: string }[] = [
-    { key: 'daily', label: 'Daily' },
-    { key: 'weekly', label: 'Weekly' },
-    { key: 'monthly', label: 'Monthly' },
-    { key: 'pending', label: 'Pending Dues' },
+  const { data: centersList } = useQuery({
+    queryKey: ['centers'],
+    queryFn: () => client.get('/centers').then(r => r.data),
+  });
+
+  const { data: groupsList } = useQuery({
+    queryKey: ['groups-filter', reportCenterId],
+    queryFn: () => client.get('/groups', { params: reportCenterId ? { center_id: reportCenterId } : {} }).then(r => r.data),
+    enabled: tab === 'group',
+  });
+
+  const allTabs: { key: ReportTab; label: string; adminOnly?: boolean }[] = [
+    { key: 'daily',      label: 'Daily' },
+    { key: 'weekly',     label: 'Weekly' },
+    { key: 'monthly',    label: 'Monthly' },
+    { key: 'pending',    label: 'Pending Dues' },
     { key: 'defaulters', label: 'Defaulters' },
-    { key: 'center', label: 'Center-wise' },
-    { key: 'group', label: 'Group-wise' },
-    { key: 'agent', label: 'Agent-wise' },
-    { key: 'pl', label: 'Profit & Loss' },
-    { key: 'cashbook', label: 'Cash Book' },
+    { key: 'center',     label: 'Center-wise' },
+    { key: 'group',      label: 'Group-wise' },
+    { key: 'agent',      label: 'Agent-wise',   adminOnly: true },
+    { key: 'pl',         label: 'Profit & Loss', adminOnly: true },
+    { key: 'cashbook',   label: 'Cash Book',    adminOnly: true },
   ];
+  const tabs = allTabs.filter(t => isAdmin || !t.adminOnly);
 
   return (
     <div className="space-y-5 animate-fadeIn">
@@ -239,7 +272,11 @@ export default function Reports() {
               ], weeklyReport.data?.details || [])}
             />
           </div>
-          {weeklyReport.isLoading ? <PageLoader /> : weeklyReport.data && (
+          {weeklyReport.isLoading ? <PageLoader /> : weeklyReport.isError ? (
+            <div className="card bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3">
+              Failed to load weekly report. Please try again.
+            </div>
+          ) : weeklyReport.data && (
             <>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div className="card"><p className="text-xs text-slate-500">Total Amount</p><p className="text-xl font-bold text-navy-900">₹{(weeklyReport.data.summary?.total_amount || 0).toLocaleString('en-IN')}</p></div>
@@ -452,8 +489,17 @@ export default function Reports() {
       {/* Center-wise */}
       {tab === 'center' && (
         <div className="space-y-4">
-          <div className="flex items-center justify-between flex-wrap gap-3">
-            <DateRangeFilter startDate={startDate} endDate={endDate} onStart={setStartDate} onEnd={setEndDate} />
+          <div className="flex items-end justify-between flex-wrap gap-3">
+            <div className="flex gap-3 flex-wrap items-end">
+              <DateRangeFilter startDate={startDate} endDate={endDate} onStart={setStartDate} onEnd={setEndDate} />
+              <div>
+                <label className="label">Center</label>
+                <select className="input w-44" value={reportCenterId} onChange={e => setReportCenterId(e.target.value)}>
+                  <option value="">All Centers</option>
+                  {(centersList || []).map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </div>
+            </div>
             <ExportBar
               onPDF={() => exportPDF('Center-wise Report', [
                 { header: 'Center', dataKey: 'name' },
@@ -505,8 +551,25 @@ export default function Reports() {
       {/* Group-wise */}
       {tab === 'group' && (
         <div className="space-y-4">
-          <div className="flex items-center justify-between flex-wrap gap-3">
-            <DateRangeFilter startDate={startDate} endDate={endDate} onStart={setStartDate} onEnd={setEndDate} />
+          <div className="flex items-end justify-between flex-wrap gap-3">
+            <div className="flex gap-3 flex-wrap items-end">
+              <DateRangeFilter startDate={startDate} endDate={endDate} onStart={setStartDate} onEnd={setEndDate} />
+              <div>
+                <label className="label">Center</label>
+                <select className="input w-44" value={reportCenterId}
+                  onChange={e => { setReportCenterId(e.target.value); setReportGroupId(''); }}>
+                  <option value="">All Centers</option>
+                  {(centersList || []).map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="label">Group</label>
+                <select className="input w-44" value={reportGroupId} onChange={e => setReportGroupId(e.target.value)}>
+                  <option value="">All Groups</option>
+                  {(groupsList || []).map((g: any) => <option key={g.id} value={g.id}>{g.name}</option>)}
+                </select>
+              </div>
+            </div>
             <ExportBar
               onPDF={() => exportPDF('Group-wise Report', [
                 { header: 'Group', dataKey: 'group_name' },

@@ -103,25 +103,6 @@ export default function Login() {
             </button>
           </form>
 
-          <div className="mt-6 pt-5 border-t border-slate-100">
-            <p className="text-xs text-slate-400 text-center mb-3">Demo Credentials</p>
-            <div className="grid grid-cols-2 gap-2">
-              {[
-                { label: 'Admin', email: 'admin@spsgroup.com', pwd: 'admin123' },
-                { label: 'Staff', email: 'ravi@spsgroup.com', pwd: 'staff123' },
-              ].map(d => (
-                <button
-                  key={d.label}
-                  type="button"
-                  onClick={() => setForm({ email: d.email, password: d.pwd })}
-                  className="text-xs p-2 bg-slate-50 hover:bg-slate-100 rounded-lg border border-slate-200 text-left transition-colors"
-                >
-                  <div className="font-semibold text-navy-800">{d.label}</div>
-                  <div className="text-slate-500 truncate">{d.email}</div>
-                </button>
-              ))}
-            </div>
-          </div>
         </div>
 
         <p className="text-center text-slate-500 text-xs mt-6">

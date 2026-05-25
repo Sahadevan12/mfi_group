@@ -17,7 +17,6 @@ import Reports from './pages/Reports';
 import Expenses from './pages/Expenses';
 import Settings from './pages/Settings';
 import Notifications from './pages/Notifications';
-import SmsSettings from './pages/SmsSettings';
 import BackupSettings from './pages/BackupSettings';
 import GroupMembers from './pages/GroupMembers';
 import CustomerPortal from './pages/CustomerPortal';
@@ -74,7 +73,6 @@ export default function App() {
           <Route path="reports" element={<Reports />} />
           <Route path="expenses" element={<Expenses />} />
           <Route path="notifications" element={<Notifications />} />
-          <Route path="sms-settings" element={<SmsSettings />} />
           <Route path="backup" element={<BackupSettings />} />
           <Route path="settings" element={<Settings />} />
         </Route>

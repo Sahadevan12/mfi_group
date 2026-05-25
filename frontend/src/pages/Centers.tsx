@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Edit, Trash2, MapPin, Clock, Users, Search } from 'lucide-react';
 import client from '../api/client';
@@ -18,7 +18,14 @@ export default function Centers() {
   const [modal, setModal] = useState(false);
   const [editing, setEditing] = useState<Center | null>(null);
   const [form, setForm] = useState(emptyForm);
+  const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
+
+  // Debounce — 500ms after typing stops
+  useEffect(() => {
+    const t = setTimeout(() => { setSearch(searchInput); }, 500);
+    return () => clearTimeout(t);
+  }, [searchInput]);
 
   const { data: centers, isLoading } = useQuery<Center[]>({
     queryKey: ['centers', search],
@@ -62,7 +69,7 @@ export default function Centers() {
         <div className="flex gap-2">
           <div className="relative">
             <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input className="input pl-9 w-44" placeholder="Search centers..." value={search} onChange={e => setSearch(e.target.value)} />
+            <input className="input pl-9 w-44" placeholder="Search centers..." value={searchInput} onChange={e => setSearchInput(e.target.value)} />
           </div>
           {isAdmin && (
             <button onClick={() => openModal()} className="btn-primary">

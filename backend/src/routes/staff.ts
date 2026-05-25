@@ -12,7 +12,7 @@ router.get('/', authenticate, requireRole('admin'), async (req: Request, res: Re
     const monthStart = today.substring(0, 7) + '-01';
 
     const staff = await query<any>(`
-      SELECT u.id, u.name, u.email, u.phone, u.is_active, u.created_at,
+      SELECT u.id, u.name, u.email, u.phone, u.address, u.is_active, u.created_at,
              COUNT(DISTINCT ce.id) as assigned_centers,
              COUNT(DISTINCT col.id) as total_collections,
              COALESCE(SUM(col.amount), 0) as total_amount,

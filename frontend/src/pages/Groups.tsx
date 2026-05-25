@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Plus, Edit, Trash2, Users, ChevronRight, Search,
@@ -23,8 +23,15 @@ export default function Groups() {
   const [editing, setEditing] = useState<Group | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [centerFilter, setCenterFilter] = useState('');
+  const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [leaderSearch, setLeaderSearch] = useState('');
+
+  // Debounce — 500ms after typing stops
+  useEffect(() => {
+    const t = setTimeout(() => { setSearch(searchInput); }, 500);
+    return () => clearTimeout(t);
+  }, [searchInput]);
 
   // ── Data fetches ──
   const { data: groups, isLoading } = useQuery<Group[]>({
@@ -109,7 +116,7 @@ export default function Groups() {
           <div className="relative">
             <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input className="input pl-9 w-44" placeholder="Search groups..."
-              value={search} onChange={e => setSearch(e.target.value)} />
+              value={searchInput} onChange={e => setSearchInput(e.target.value)} />
           </div>
           <select className="input w-44" value={centerFilter} onChange={e => setCenterFilter(e.target.value)}>
             <option value="">All Centers</option>
