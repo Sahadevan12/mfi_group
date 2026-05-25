@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import jwt from 'jsonwebtoken';
 import { query, queryOne } from '../database';
 import { authenticate } from '../middleware/auth';
 
@@ -10,6 +11,34 @@ function requireCustomer(req: Request, res: Response, next: Function) {
   next();
 }
 
+// ── Customer login by mobile number ──
+router.post('/login', async (req: Request, res: Response) => {
+  try {
+    const { mobile } = req.body;
+    if (!mobile) return res.status(400).json({ error: 'Mobile number required' });
+
+    const customer = await queryOne<any>(
+      'SELECT id, name, mobile FROM customers WHERE mobile = ? AND is_active = 1',
+      [String(mobile).trim()]
+    );
+    if (!customer) return res.status(404).json({ error: 'Mobile number not registered' });
+
+    const token = jwt.sign(
+      { id: customer.id, role: 'customer', name: customer.name, email: '' },
+      process.env.JWT_SECRET || 'secret',
+      { expiresIn: '1d' }
+    );
+
+    return res.json({
+      token,
+      user: { id: customer.id, name: customer.name, role: 'customer', mobile: customer.mobile },
+    });
+  } catch (err: any) {
+    console.error(err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 router.get('/profile', authenticate, requireCustomer, async (req: Request, res: Response) => {
   try {
     const customer = await queryOne<any>(`
@@ -17,7 +46,7 @@ router.get('/profile', authenticate, requireCustomer, async (req: Request, res: 
       FROM customers cu
       LEFT JOIN centers ce ON cu.center_id = ce.id
       LEFT JOIN \`groups\` g ON cu.group_id = g.id
-      WHERE cu.user_id = ?
+      WHERE cu.id = ?
     `, [req.user!.id]);
     if (!customer) return res.status(404).json({ error: 'Profile not found' });
     return res.json(customer);
@@ -29,7 +58,7 @@ router.get('/profile', authenticate, requireCustomer, async (req: Request, res: 
 
 router.get('/loans', authenticate, requireCustomer, async (req: Request, res: Response) => {
   try {
-    const customer = await queryOne<any>('SELECT id FROM customers WHERE user_id = ?', [req.user!.id]);
+    const customer = await queryOne<any>('SELECT id FROM customers WHERE id = ?', [req.user!.id]);
     if (!customer) return res.status(404).json({ error: 'Customer not found' });
 
     const loans = await query<any>(`
@@ -49,7 +78,7 @@ router.get('/loans', authenticate, requireCustomer, async (req: Request, res: Re
 
 router.get('/loans/:loanId/schedule', authenticate, requireCustomer, async (req: Request, res: Response) => {
   try {
-    const customer = await queryOne<any>('SELECT id FROM customers WHERE user_id = ?', [req.user!.id]);
+    const customer = await queryOne<any>('SELECT id FROM customers WHERE id = ?', [req.user!.id]);
     if (!customer) return res.status(404).json({ error: 'Customer not found' });
 
     const loan = await queryOne<any>('SELECT id FROM loans WHERE id = ? AND customer_id = ?', [req.params.loanId, customer.id]);
@@ -72,7 +101,7 @@ router.get('/loans/:loanId/schedule', authenticate, requireCustomer, async (req:
 
 router.get('/payments', authenticate, requireCustomer, async (req: Request, res: Response) => {
   try {
-    const customer = await queryOne<any>('SELECT id FROM customers WHERE user_id = ?', [req.user!.id]);
+    const customer = await queryOne<any>('SELECT id FROM customers WHERE id = ?', [req.user!.id]);
     if (!customer) return res.status(404).json({ error: 'Customer not found' });
 
     const { loan_id, page = '1', limit = '20' } = req.query;
@@ -102,7 +131,7 @@ router.get('/payments', authenticate, requireCustomer, async (req: Request, res:
 
 router.get('/receipt/:collectionId', authenticate, requireCustomer, async (req: Request, res: Response) => {
   try {
-    const customer = await queryOne<any>('SELECT id FROM customers WHERE user_id = ?', [req.user!.id]);
+    const customer = await queryOne<any>('SELECT id FROM customers WHERE id = ?', [req.user!.id]);
     if (!customer) return res.status(404).json({ error: 'Customer not found' });
 
     const receipt = await queryOne<any>(`
@@ -127,7 +156,7 @@ router.get('/receipt/:collectionId', authenticate, requireCustomer, async (req: 
 
 router.get('/next-due', authenticate, requireCustomer, async (req: Request, res: Response) => {
   try {
-    const customer = await queryOne<any>('SELECT id FROM customers WHERE user_id = ?', [req.user!.id]);
+    const customer = await queryOne<any>('SELECT id FROM customers WHERE id = ?', [req.user!.id]);
     if (!customer) return res.status(404).json({ error: 'Customer not found' });
 
     const today = new Date().toISOString().split('T')[0];

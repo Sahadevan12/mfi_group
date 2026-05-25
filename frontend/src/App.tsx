@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useAuthStore } from './store/authStore';
 import AppLayout from './components/Layout/AppLayout';
 import Login from './pages/Login';
+import CustomerLogin from './pages/CustomerLogin';
 import Dashboard from './pages/Dashboard';
 import Centers from './pages/Centers';
 import Groups from './pages/Groups';
@@ -44,6 +45,7 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<Login />} />
+        <Route path="/customer-login" element={<CustomerLogin />} />
 
         {/* Customer Portal — standalone, no sidebar */}
         <Route path="/portal" element={
