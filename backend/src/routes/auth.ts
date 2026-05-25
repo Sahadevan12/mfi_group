@@ -1,10 +1,32 @@
 import { Router, Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import { v4 as uuidv4 } from 'uuid';
 import { query, queryOne, execute } from '../database';
 import { authenticate } from '../middleware/auth';
 
 const router = Router();
+
+// ── One-time admin setup (only works if no admin exists) ──
+router.post('/setup', async (req: Request, res: Response) => {
+  try {
+    const { secret, name, email, password } = req.body;
+    const setupSecret = process.env.SETUP_SECRET || 'SPS_SETUP_2026';
+    if (secret !== setupSecret) return res.status(403).json({ error: 'Invalid secret' });
+
+    const admins = await query('SELECT id FROM users WHERE role = "admin" LIMIT 1', []);
+    if (admins.length > 0) return res.status(400).json({ error: 'Admin already exists' });
+
+    const hash = bcrypt.hashSync(password, 12);
+    await execute(
+      `INSERT INTO users (id, name, email, password_hash, role, phone, is_active) VALUES (?, ?, ?, ?, 'admin', '', 1)`,
+      [uuidv4(), name, email, hash]
+    );
+    return res.json({ message: 'Admin created!', email, password });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
 
 router.post('/login', async (req: Request, res: Response) => {
   try {
