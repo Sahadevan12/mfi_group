@@ -77,6 +77,18 @@ const PORT = process.env.PORT || 5000;
 
     app.get('/api/health', (_, res) => res.json({ status: 'ok', time: new Date().toISOString() }));
 
+    // ── Serve React frontend (production) ──
+    const frontendDist = path.join(__dirname, '../public');
+    if (fs.existsSync(frontendDist)) {
+      app.use(express.static(frontendDist));
+      // SPA fallback — all non-API routes → index.html
+      app.get('*', (req, res) => {
+        if (!req.path.startsWith('/api')) {
+          res.sendFile(path.join(frontendDist, 'index.html'));
+        }
+      });
+    }
+
     // Scheduled tasks
     // Every day at 8am: send due reminders for next 3 days
     cron.schedule('0 8 * * *', async () => {

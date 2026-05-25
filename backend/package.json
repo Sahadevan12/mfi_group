@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
     "build": "tsc",
+    "build:prod": "cd ../frontend && npm install && npm run build && cd ../backend && mkdir -p public && cp -r ../frontend/dist/. public/ && tsc",
     "start": "node dist/index.js",
     "seed": "ts-node-dev --transpile-only src/seed.ts",
     "seed:dummy": "ts-node-dev --transpile-only src/seed-dummy.ts",
