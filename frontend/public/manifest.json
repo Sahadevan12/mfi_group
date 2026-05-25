@@ -2,6 +2,7 @@
   "name": "SPS Group MFI",
   "short_name": "SPS MFI",
   "description": "SPS Group of Foundation - Microfinance Management System",
+  "id": "/",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0f1e44",
