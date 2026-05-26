@@ -179,31 +179,40 @@ router.get('/group-wise', authenticate, async (req: Request, res: Response) => {
     const { start_date, end_date, center_id, group_id } = req.query;
     const from = (start_date as string) || new Date().toISOString().split('T')[0].substring(0, 7) + '-01';
     const to = (end_date as string) || new Date().toISOString().split('T')[0];
-    const params: any[] = [to, to, from, to, from, to];
+
     let centerFilter = '';
-    if (center_id) { centerFilter += ' AND g.center_id = ?'; params.push(center_id); }
-    if (group_id)  { centerFilter += ' AND g.id = ?';        params.push(group_id); }
+    const filterParams: any[] = [];
+    if (center_id) { centerFilter += ' AND g.center_id = ?'; filterParams.push(center_id); }
+    if (group_id)  { centerFilter += ' AND g.id = ?';        filterParams.push(group_id); }
     if (req.user!.role === 'staff') {
       centerFilter += ' AND g.center_id IN (SELECT id FROM centers WHERE staff_id = ? AND is_active = 1)';
-      params.push(req.user!.id);
+      filterParams.push(req.user!.id);
     }
 
     const data = await query<any>(`
       SELECT g.id, g.name as group_name, ce.name as center_name,
              COUNT(DISTINCT cu.id) as members,
              COUNT(DISTINCT CASE WHEN l.status='active' THEN l.id END) as active_loans,
-             COALESCE(SUM(col.amount), 0) as collected,
-             COUNT(DISTINCT CASE WHEN ls.status IN ('pending','overdue') AND ls.due_date <= ? THEN ls.id END) as pending_installments,
-             COALESCE(SUM(CASE WHEN ls.status IN ('pending','overdue') AND ls.due_date <= ? THEN ls.emi_amount - ls.paid_amount ELSE 0 END), 0) as pending_amount
+             COALESCE((
+               SELECT SUM(c2.amount) FROM collections c2
+               JOIN customers cu2 ON c2.customer_id = cu2.id
+               WHERE cu2.group_id = g.id AND c2.payment_date BETWEEN ? AND ?
+             ), 0) as collected,
+             COALESCE((
+               SELECT SUM(ls2.emi_amount - ls2.paid_amount)
+               FROM loan_schedule ls2
+               JOIN loans l2 ON ls2.loan_id = l2.id
+               JOIN customers cu2 ON l2.customer_id = cu2.id
+               WHERE cu2.group_id = g.id AND l2.status = 'active'
+               AND ls2.status IN ('pending','overdue') AND ls2.due_date <= ?
+             ), 0) as pending_amount
       FROM \`groups\` g
       LEFT JOIN centers ce ON g.center_id = ce.id
       LEFT JOIN customers cu ON cu.group_id = g.id AND cu.is_active = 1
-      LEFT JOIN loans l ON l.customer_id = cu.id
-      LEFT JOIN collections col ON col.customer_id = cu.id AND col.payment_date BETWEEN ? AND ?
-      LEFT JOIN loan_schedule ls ON ls.loan_id = l.id
+      LEFT JOIN loans l ON l.customer_id = cu.id AND l.status = 'active'
       WHERE g.is_active = 1 ${centerFilter}
       GROUP BY g.id, g.name, ce.name ORDER BY collected DESC
-    `, params);
+    `, [from, to, to, ...filterParams]);
 
     return res.json(data);
   } catch (err: any) {
@@ -316,28 +325,35 @@ router.get('/center-wise', authenticate, async (req: Request, res: Response) => 
     const from = (start_date as string) || new Date().toISOString().split('T')[0].substring(0, 7) + '-01';
     const to = (end_date as string) || new Date().toISOString().split('T')[0];
 
-    const params: any[] = [to, from, to];
     let centerFilter = '';
-    if (center_id) { centerFilter += ' AND ce.id = ?'; params.push(center_id); }
+    if (center_id) { centerFilter += ' AND ce.id = ?'; }
     if (req.user!.role === 'staff') {
-      centerFilter += ' AND ce.staff_id = ?'; params.push(req.user!.id);
+      centerFilter += ' AND ce.staff_id = ?';
     }
 
     const data = await query<any>(`
       SELECT ce.id, ce.name, ce.area,
              COUNT(DISTINCT cu.id) as customers,
              COUNT(DISTINCT l.id) as active_loans,
-             COALESCE(SUM(col.amount), 0) as collected,
-             COUNT(DISTINCT CASE WHEN ls.status IN ('pending','overdue') AND ls.due_date <= ? THEN ls.id END) as pending_installments
+             COALESCE((
+               SELECT SUM(c2.amount) FROM collections c2
+               JOIN customers cu2 ON c2.customer_id = cu2.id
+               WHERE cu2.center_id = ce.id AND c2.payment_date BETWEEN ? AND ?
+             ), 0) as collected,
+             COALESCE((
+               SELECT SUM(ls2.emi_amount - ls2.paid_amount)
+               FROM loan_schedule ls2
+               JOIN loans l2 ON ls2.loan_id = l2.id
+               JOIN customers cu2 ON l2.customer_id = cu2.id
+               WHERE cu2.center_id = ce.id AND l2.status = 'active'
+               AND ls2.status IN ('pending','overdue') AND ls2.due_date <= ?
+             ), 0) as pending_amount
       FROM centers ce
       LEFT JOIN customers cu ON cu.center_id = ce.id AND cu.is_active = 1
       LEFT JOIN loans l ON l.customer_id = cu.id AND l.status = 'active'
-      LEFT JOIN collections col ON col.customer_id = cu.id
-        AND col.payment_date BETWEEN ? AND ?
-      LEFT JOIN loan_schedule ls ON ls.loan_id = l.id
       WHERE ce.is_active = 1 ${centerFilter}
       GROUP BY ce.id ORDER BY collected DESC
-    `, params);
+    `, [from, to, to, ...( center_id ? [center_id] : []), ...(req.user!.role === 'staff' ? [req.user!.id] : [])]);
 
     return res.json(data);
   } catch (err: any) {
