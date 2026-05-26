@@ -16,19 +16,25 @@ export const pool = mysql.createPool({
   dateStrings: true,
 });
 
+// MySQL2 execute() rejects undefined — convert all undefined to null
+function sanitize(params?: any[]): any[] | undefined {
+  if (!params) return params;
+  return params.map(p => (p === undefined ? null : p));
+}
+
 export async function query<T = any>(sql: string, params?: any[]): Promise<T[]> {
-  const [rows] = await pool.query(sql, params);
+  const [rows] = await pool.query(sql, sanitize(params));
   return rows as T[];
 }
 
 export async function queryOne<T = any>(sql: string, params?: any[]): Promise<T | null> {
-  const [rows] = await pool.query(sql, params);
+  const [rows] = await pool.query(sql, sanitize(params));
   const arr = rows as T[];
   return arr.length > 0 ? arr[0] : null;
 }
 
 export async function execute(sql: string, params?: any[]): Promise<mysql.ResultSetHeader> {
-  const [result] = await pool.execute(sql, params);
+  const [result] = await pool.execute(sql, sanitize(params));
   return result as mysql.ResultSetHeader;
 }
 
@@ -345,10 +351,21 @@ export async function initDatabase(): Promise<void> {
 
   await conn.execute(`INSERT IGNORE INTO sms_settings (id) VALUES ('default')`);
 
+  // Auto-configure OTP from environment variable (set APITXT_OTP_KEY in Hostinger env panel)
+  if (process.env.APITXT_OTP_KEY) {
+    await conn.execute(
+      `UPDATE sms_settings SET otp_api_key = ?, otp_provider = 'apitxt' WHERE id = 'default'`,
+      [process.env.APITXT_OTP_KEY]
+    );
+    console.log('✅ apitxt OTP key configured from environment');
+  }
+
   // Add new columns to existing tables (safe: ignore error if column already exists)
   const migrations = [
     `ALTER TABLE loans ADD COLUMN disbursement_date VARCHAR(255) AFTER penalty_per_day`,
     `ALTER TABLE \`groups\` ADD COLUMN leader_id VARCHAR(36) AFTER description`,
+    `ALTER TABLE sms_settings ADD COLUMN otp_api_key VARCHAR(500) DEFAULT NULL AFTER api_key`,
+    `ALTER TABLE sms_settings ADD COLUMN otp_provider VARCHAR(50) DEFAULT 'twofactor' AFTER otp_api_key`,
   ];
   for (const m of migrations) {
     try { await conn.execute(m); } catch {}
