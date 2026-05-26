@@ -1,10 +1,8 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Phone, ArrowRight, Loader2, AlertCircle } from 'lucide-react';
-import axios from 'axios';
+import client from '../api/client';
 import { useAuthStore } from '../store/authStore';
-
-const API = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 export default function CustomerLogin() {
   const navigate = useNavigate();
@@ -24,7 +22,7 @@ export default function CustomerLogin() {
     setError('');
     setLoading(true);
     try {
-      const { data } = await axios.post(`${API}/portal/login`, { mobile: clean });
+      const { data } = await client.post('/portal/login', { mobile: clean });
       setAuth(data.user, data.token);
       navigate('/portal', { replace: true });
     } catch (err: any) {
