@@ -1,31 +1,26 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import axios from 'axios';
 import { format } from 'date-fns';
 import {
-  User, CreditCard, Calendar, Receipt, LogOut,
+  CreditCard, Calendar, Receipt, LogOut,
   TrendingUp, AlertCircle, CheckCircle, Clock, Download
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { exportReceiptPDF } from '../utils/exportUtils';
-
-const API = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-function getHeaders() {
-  const token = useAuthStore.getState().token;
-  return { Authorization: `Bearer ${token}` };
-}
+import client from '../api/client';
 
 type PortalTab = 'overview' | 'loans' | 'payments' | 'schedule';
 
 export default function CustomerPortal() {
   const { user, logout } = useAuthStore();
+  const handleLogout = () => { logout(); window.location.href = '/customer-login'; };
   const [activeTab, setActiveTab] = useState<PortalTab>('overview');
   const [selectedLoan, setSelectedLoan] = useState<string | null>(null);
 
   const { data: profile } = useQuery({
     queryKey: ['portal-profile'],
     queryFn: async () => {
-      const { data } = await axios.get(`${API}/portal/profile`, { headers: getHeaders() });
+      const { data } = await client.get('/portal/profile');
       return data;
     },
   });
@@ -33,7 +28,7 @@ export default function CustomerPortal() {
   const { data: loans } = useQuery({
     queryKey: ['portal-loans'],
     queryFn: async () => {
-      const { data } = await axios.get(`${API}/portal/loans`, { headers: getHeaders() });
+      const { data } = await client.get('/portal/loans');
       return data;
     },
   });
@@ -41,7 +36,7 @@ export default function CustomerPortal() {
   const { data: nextDue } = useQuery({
     queryKey: ['portal-next-due'],
     queryFn: async () => {
-      const { data } = await axios.get(`${API}/portal/next-due`, { headers: getHeaders() });
+      const { data } = await client.get('/portal/next-due');
       return data;
     },
   });
@@ -49,7 +44,7 @@ export default function CustomerPortal() {
   const { data: payments } = useQuery({
     queryKey: ['portal-payments'],
     queryFn: async () => {
-      const { data } = await axios.get(`${API}/portal/payments?limit=50`, { headers: getHeaders() });
+      const { data } = await client.get('/portal/payments?limit=50');
       return data;
     },
     enabled: activeTab === 'payments',
@@ -58,7 +53,7 @@ export default function CustomerPortal() {
   const { data: schedule } = useQuery({
     queryKey: ['portal-schedule', selectedLoan],
     queryFn: async () => {
-      const { data } = await axios.get(`${API}/portal/loans/${selectedLoan}/schedule`, { headers: getHeaders() });
+      const { data } = await client.get(`/portal/loans/${selectedLoan}/schedule`);
       return data;
     },
     enabled: !!selectedLoan && activeTab === 'schedule',
@@ -68,7 +63,7 @@ export default function CustomerPortal() {
   const closedLoans = (loans || []).filter((l: any) => l.status === 'closed');
 
   const handleReceiptDownload = async (paymentId: string) => {
-    const { data } = await axios.get(`${API}/portal/receipt/${paymentId}`, { headers: getHeaders() });
+    const { data } = await client.get(`/portal/receipt/${paymentId}`);
     exportReceiptPDF(data);
   };
 
@@ -93,7 +88,7 @@ export default function CustomerPortal() {
               <p className="text-sm font-medium">{profile?.name || user?.name}</p>
               <p className="text-xs text-navy-300">{profile?.group_name || 'Member'}</p>
             </div>
-            <button onClick={logout} className="p-2 hover:bg-white/10 rounded-lg transition-colors" title="Logout">
+            <button onClick={handleLogout} className="p-2 hover:bg-white/10 rounded-lg transition-colors" title="Logout">
               <LogOut size={18} />
             </button>
           </div>
