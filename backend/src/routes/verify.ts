@@ -2,14 +2,17 @@ import { Router, Request, Response } from 'express';
 import { authenticate } from '../middleware/auth';
 import { queryOne } from '../database';
 import { sendSMS } from '../services/smsService';
+import axios from 'axios';
 
 const router = Router();
 
 interface OTPEntry {
   otp: string;
+  session?: string;       // 2Factor session id
   expiresAt: number;
   verified: boolean;
   attempts: number;
+  provider: 'twofactor' | 'sms';
 }
 
 // In-memory OTP store  { mobile → OTPEntry }
@@ -40,23 +43,73 @@ router.post('/send-otp', authenticate, async (req: Request, res: Response) => {
       return res.status(429).json({ error: `Please wait ${waitSec}s before resending` });
     }
 
-    // Generate 6-digit OTP
+    const settings = await queryOne<any>('SELECT * FROM sms_settings WHERE id = ?', ['default']);
+    // Fall back to environment variable if DB not yet configured
+    const otpApiKey = settings?.otp_api_key || process.env.APITXT_OTP_KEY;
+    const otpProvider = settings?.otp_provider || (process.env.APITXT_OTP_KEY ? 'apitxt' : 'twofactor');
+
+    // ── apitxt OTP (we generate OTP, apitxt sends SMS) ──
+    if (otpApiKey && otpProvider === 'apitxt') {
+      try {
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+        const resA = await axios.get('https://apitxt.com/api/sendOTP', {
+          params: { authkey: otpApiKey, mobile: '91' + clean, otp },
+          timeout: 10000,
+        });
+        console.log('[apitxt OTP] Response:', JSON.stringify(resA.data));
+        if (resA.data?.type === 'success' || resA.status === 200) {
+          otpStore.set(clean, {
+            otp,
+            expiresAt: Date.now() + 10 * 60 * 1000,
+            verified: false, attempts: 0,
+            provider: 'sms',  // server-side verify, no session needed
+          });
+          return res.json({ sent: true, demo: false, message: `OTP sent to ${clean.slice(0, 5)}XXXXX` });
+        }
+        console.error('[apitxt OTP] Failed:', resA.data);
+      } catch (e: any) {
+        console.error('[apitxt OTP] Error:', e.message);
+        // Fall through to fallback
+      }
+    }
+
+    // ── 2Factor native OTP (session-based verify) ──
+    if (otpApiKey && otpProvider === 'twofactor') {
+      try {
+        const res2f = await axios.get(
+          `https://2factor.in/API/V1/${otpApiKey}/SMS/${clean}/AUTOGEN`,
+          { timeout: 10000 }
+        );
+        if (res2f.data?.Status === 'Success') {
+          const session = res2f.data.Details;
+          otpStore.set(clean, {
+            otp: '', session,
+            expiresAt: Date.now() + 10 * 60 * 1000,
+            verified: false, attempts: 0,
+            provider: 'twofactor',
+          });
+          return res.json({ sent: true, demo: false, message: `OTP sent to ${clean.slice(0, 5)}XXXXX` });
+        }
+      } catch (e: any) {
+        console.error('[2Factor OTP] Error:', e.message);
+        // Fall through to fallback
+      }
+    }
+
+    // ── Fallback — generate OTP and send via main SMS provider ──
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    otpStore.set(clean, { otp, expiresAt: Date.now() + 10 * 60 * 1000, verified: false, attempts: 0 });
+    otpStore.set(clean, {
+      otp, expiresAt: Date.now() + 10 * 60 * 1000,
+      verified: false, attempts: 0, provider: 'sms',
+    });
 
-    const message = `Your SPS Group verification code is ${otp}. Valid for 10 minutes. Do not share with anyone.`;
-
-    // Check if SMS provider is configured
-    const settings = await queryOne<any>('SELECT is_active, api_key FROM sms_settings WHERE id = ?', ['default']);
-    const smsConfigured = !!(settings?.is_active && settings?.api_key);
-
+    const message = `Your SPS Group verification code is ${otp}. Valid for 10 minutes. Do not share.`;
+    const smsConfigured = !!(settings?.is_active && settings?.api_key) || !!process.env.APITXT_OTP_KEY;
     await sendSMS(null, clean, message, 'otp_verification');
 
     if (smsConfigured) {
-      // Real SMS sent — don't expose OTP
       return res.json({ sent: true, demo: false, message: `OTP sent to ${clean.slice(0, 5)}XXXXX` });
     } else {
-      // SMS not configured — return OTP for demo/testing
       console.log(`[OTP DEMO] ${clean} → ${otp}`);
       return res.json({ sent: true, demo: true, otp, message: `Demo mode: SMS not configured` });
     }
@@ -91,14 +144,37 @@ router.post('/verify-otp', authenticate, async (req: Request, res: Response) => 
       return res.status(400).json({ error: 'Too many wrong attempts. Please send a new OTP.' });
     }
 
+    // 2Factor native verify
+    if (entry.provider === 'twofactor' && entry.session) {
+      try {
+        const settings = await queryOne<any>('SELECT otp_api_key FROM sms_settings WHERE id = ?', ['default']);
+        const res2f = await axios.get(
+          `https://2factor.in/API/V1/${settings?.otp_api_key}/SMS/VERIFY/${entry.session}/${otp.trim()}`,
+          { timeout: 10000 }
+        );
+        if (res2f.data?.Status === 'Success') {
+          entry.verified = true;
+          otpStore.delete(clean);
+          return res.json({ verified: true, message: 'Mobile number verified successfully' });
+        } else {
+          entry.attempts += 1;
+          const remaining = 5 - entry.attempts;
+          return res.status(400).json({ error: `Wrong OTP. ${remaining} attempt${remaining !== 1 ? 's' : ''} left.` });
+        }
+      } catch (e: any) {
+        return res.status(500).json({ error: 'Verification failed: ' + e.message });
+      }
+    }
+
+    // Fallback SMS OTP verify
     if (entry.otp !== otp.trim()) {
       entry.attempts += 1;
       const remaining = 5 - entry.attempts;
       return res.status(400).json({ error: `Wrong OTP. ${remaining} attempt${remaining !== 1 ? 's' : ''} left.` });
     }
 
-    // Mark verified
     entry.verified = true;
+    otpStore.delete(clean);
     return res.json({ verified: true, message: 'Mobile number verified successfully' });
   } catch (err: any) {
     console.error(err);
