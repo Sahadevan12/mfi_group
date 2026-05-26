@@ -83,7 +83,7 @@ export function calculateLoan(params: LoanParams): EMIResult {
   if (interestType === 'flat') {
     totalInterest = amount * (interestRate / 100) * (duration / (durationUnit === 'months' ? 12 : durationUnit === 'weeks' ? 52 : 365));
     const totalPayableAmount = amount + totalInterest;
-    emiAmount = Math.ceil(totalPayableAmount / n);
+    emiAmount = Math.round(totalPayableAmount / n);
     const principalPerInstallment = amount / n;
     const interestPerInstallment = totalInterest / n;
     let balance = amount;
