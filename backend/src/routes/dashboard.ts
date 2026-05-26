@@ -25,7 +25,7 @@ async function getDashboardStats() {
   const activeLoans = (await queryOne<any>("SELECT COUNT(*) as c FROM loans WHERE status = 'active'"))?.c || 0;
   const pendingLoans = (await queryOne<any>("SELECT COUNT(*) as c FROM loans WHERE status = 'pending'"))?.c || 0;
   const totalCollection = (await queryOne<any>("SELECT COALESCE(SUM(amount), 0) as s FROM collections WHERE payment_date = ?", [today]))?.s || 0;
-  const monthCollection = (await queryOne<any>("SELECT COALESCE(SUM(amount), 0) as s FROM collections WHERE payment_date >= ?", [monthStart]))?.s || 0;
+  const monthCollection = (await queryOne<any>("SELECT COALESCE(SUM(amount), 0) as s FROM collections WHERE DATE_FORMAT(payment_date, '%Y-%m') = DATE_FORMAT(?, '%Y-%m')", [today]))?.s || 0;
   const totalCollectionAll = (await queryOne<any>("SELECT COALESCE(SUM(amount), 0) as s FROM collections"))?.s || 0;
   const overdueLoans = (await queryOne<any>(`SELECT COUNT(DISTINCT loan_id) as c FROM loan_schedule WHERE status = 'overdue' OR (due_date < ? AND status = 'pending')`, [today]))?.c || 0;
   const pendingAmount = (await queryOne<any>(`SELECT COALESCE(SUM(emi_amount - paid_amount), 0) as s FROM loan_schedule WHERE status IN ('pending', 'partial', 'overdue') AND due_date <= ?`, [today]))?.s || 0;
@@ -57,7 +57,7 @@ router.get('/live', (req: Request, res: Response) => {
   if (!token) return res.status(401).end();
 
   try {
-    const JWT_SECRET = process.env.JWT_SECRET || 'sps_mfi_secret_key_2024';
+    const JWT_SECRET = process.env.JWT_SECRET || 'secret';
     jwt.verify(token, JWT_SECRET);
   } catch {
     return res.status(401).end();

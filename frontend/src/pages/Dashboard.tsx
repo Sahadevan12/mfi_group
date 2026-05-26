@@ -15,12 +15,10 @@ import { PageLoader } from '../components/ui/Spinner';
 import { useSSE } from '../hooks/useSSE';
 import { useAuthStore } from '../store/authStore';
 
-const SSE_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5000/api') + '/dashboard/live';
+const SSE_URL = '/api/dashboard/live';
 
 function fmt(n: number) {
-  if (n >= 100000) return `₹${(n / 100000).toFixed(1)}L`;
-  if (n >= 1000) return `₹${(n / 1000).toFixed(1)}K`;
-  return `₹${n.toFixed(0)}`;
+  return `₹${Number(n || 0).toLocaleString('en-IN')}`;
 }
 
 function StatCard({ icon: Icon, label, value, sub, color }: any) {
@@ -41,10 +39,7 @@ function StatCard({ icon: Icon, label, value, sub, color }: any) {
 }
 
 function fmtCurrency(n: number) {
-  if (n >= 10000000) return `₹${(n / 10000000).toFixed(2)} Cr`;
-  if (n >= 100000)   return `₹${(n / 100000).toFixed(2)} L`;
-  if (n >= 1000)     return `₹${(n / 1000).toFixed(1)}K`;
-  return `₹${n.toLocaleString('en-IN')}`;
+  return `₹${Number(n || 0).toLocaleString('en-IN')}`;
 }
 
 interface SummaryCardProps {
@@ -237,7 +232,7 @@ export default function Dashboard() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard icon={Users} label="Total Customers" value={s.totalCustomers} sub={`${s.totalCenters} Centers`} color="bg-navy-800" />
         <StatCard icon={CreditCard} label="Active Loans" value={s.activeLoans} sub={`${s.pendingLoans} pending approval`} color="bg-emerald-500" />
-        <StatCard icon={Wallet} label="Today's Collection" value={fmt(s.totalCollection)} sub={`₹${(s.monthCollection/1000).toFixed(1)}K this month`} color="bg-gold-500" />
+        <StatCard icon={Wallet} label="Today's Collection" value={fmt(s.totalCollection)} sub={`₹${Number(s.monthCollection||0).toLocaleString('en-IN')} this month`} color="bg-gold-500" />
         <StatCard icon={AlertTriangle} label="Overdue Loans" value={s.overdueLoans} sub={`${fmt(s.pendingAmount)} pending`} color="bg-red-500" />
       </div>
 
