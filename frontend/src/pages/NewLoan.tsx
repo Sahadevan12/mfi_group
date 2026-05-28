@@ -13,11 +13,23 @@ const freqLabel: Record<string, string> = {
   monthly: 'Months', weekly: 'Weeks', daily: 'Days',
 };
 
+const LOAN_TYPES = ['JLG', 'Product'];
+
+const LOAN_REASONS = [
+  'சிறுதொழில்',
+  'விவசாய கடன்',
+  'வீட்டு கடன்',
+  'கல்வி கடன்',
+  'மருத்துவ செலவு',
+  'பொது தேவை',
+];
+
 const initForm = {
   customer_id: '', amount: '', interest_amount: '',
   duration: '12', duration_unit: 'months', emi_frequency: 'monthly',
   disbursement_date: today, start_date: today,
   processing_fee: '0', penalty_per_day: '0', notes: '',
+  loan_type: 'JLG', loan_reason: '',
 };
 
 // Duration units per frequency (for rate derivation)
@@ -146,6 +158,21 @@ export default function NewLoan() {
           <div className="card">
             <p className="section-title">Loan Details</p>
             <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="label">Loan Type *</label>
+                  <select className="input" value={form.loan_type} onChange={e => set('loan_type', e.target.value)}>
+                    {LOAN_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="label">Loan Reason *</label>
+                  <select className="input" value={form.loan_reason} onChange={e => set('loan_reason', e.target.value)}>
+                    <option value="">-- தேர்வு செய்யவும் --</option>
+                    {LOAN_REASONS.map(r => <option key={r} value={r}>{r}</option>)}
+                  </select>
+                </div>
+              </div>
               <div>
                 <label className="label">Loan Amount (₹) *</label>
                 <input type="number" className="input" value={form.amount} onChange={e => set('amount', e.target.value)} placeholder="50000" />
@@ -307,6 +334,8 @@ export default function NewLoan() {
               processing_fee:   form.processing_fee,
               penalty_per_day:  form.penalty_per_day,
               notes:            form.notes,
+              loan_type:        form.loan_type,
+              loan_reason:      form.loan_reason,
             })}
             disabled={!form.customer_id || !calc || create.isPending}
             className="btn-primary w-full justify-center py-3 text-base"

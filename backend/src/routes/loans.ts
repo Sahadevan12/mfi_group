@@ -103,7 +103,8 @@ router.post('/', authenticate, requireRole('admin', 'staff'), async (req: Reques
   try {
     const {
       customer_id, amount, interest_rate, interest_type, duration, duration_unit,
-      emi_frequency, disbursement_date, start_date, processing_fee, penalty_per_day, notes
+      emi_frequency, disbursement_date, start_date, processing_fee, penalty_per_day,
+      notes, loan_type, loan_reason
     } = req.body;
 
     if (!customer_id || !amount || !interest_rate) {
@@ -128,8 +129,8 @@ router.post('/', authenticate, requireRole('admin', 'staff'), async (req: Reques
         INSERT INTO loans (id, loan_no, customer_id, amount, interest_rate, interest_type,
           duration, duration_unit, emi_frequency, emi_amount, total_payable, total_interest,
           processing_fee, penalty_per_day, disbursement_date, start_date, end_date,
-          total_installments, notes, created_by)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          total_installments, notes, loan_type, loan_reason, created_by)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `, [
         loanId, loanNo, customer_id, amount, interest_rate, interest_type,
         duration, duration_unit || 'months', emi_frequency, calc.emiAmount,
@@ -137,7 +138,8 @@ router.post('/', authenticate, requireRole('admin', 'staff'), async (req: Reques
         processing_fee || 0, penalty_per_day || 0,
         disbursement_date || start_date,
         start_date, calc.endDate,
-        calc.totalInstallments, notes, req.user!.id
+        calc.totalInstallments, notes || null,
+        loan_type || 'JLG', loan_reason || null, req.user!.id
       ]);
 
       for (const entry of calc.schedule) {

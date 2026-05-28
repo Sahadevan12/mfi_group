@@ -366,6 +366,8 @@ export async function initDatabase(): Promise<void> {
     `ALTER TABLE \`groups\` ADD COLUMN leader_id VARCHAR(36) AFTER description`,
     `ALTER TABLE sms_settings ADD COLUMN otp_api_key VARCHAR(500) DEFAULT NULL AFTER api_key`,
     `ALTER TABLE sms_settings ADD COLUMN otp_provider VARCHAR(50) DEFAULT 'twofactor' AFTER otp_api_key`,
+    `ALTER TABLE loans ADD COLUMN loan_type VARCHAR(50) DEFAULT 'JLG' AFTER notes`,
+    `ALTER TABLE loans ADD COLUMN loan_reason VARCHAR(255) DEFAULT NULL AFTER loan_type`,
   ];
   for (const m of migrations) {
     try { await conn.execute(m); } catch {}
