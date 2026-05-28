@@ -87,9 +87,19 @@ export default function Customers() {
   const [modal, setModal] = useState(false);
   const [editing, setEditing] = useState<Customer | null>(null);
   const [form, setForm] = useState(emptyForm);
+  const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [centerFilter, setCenterFilter] = useState('');
   const [page, setPage] = useState(1);
+
+  // Debounce search — API call only after 500ms of no typing
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setSearch(searchInput);
+      setPage(1);
+    }, 500);
+    return () => clearTimeout(t);
+  }, [searchInput]);
 
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
@@ -244,9 +254,14 @@ export default function Customers() {
   };
 
   const handleSave = async () => {
-    if (!form.name.trim()) { setSaveError('Full name is required'); return; }
-    if (!form.mobile.trim()) { setSaveError('Mobile number is required'); return; }
+    if (!form.name.trim())    { setSaveError('Full name is required'); return; }
+    if (!form.mobile.trim())  { setSaveError('Mobile number is required'); return; }
     if (!editing && !otpVerified) { setSaveError('Please verify the mobile number with OTP before saving'); return; }
+    if (!form.dob)            { setSaveError('Date of Birth is required'); return; }
+    if (!form.gender)         { setSaveError('Gender is required'); return; }
+    if (!form.aadhaar.trim()) { setSaveError('Aadhaar number is required'); return; }
+
+    if (!form.address.trim()) { setSaveError('Address is required'); return; }
 
     setSaving(true);
     setSaveError('');
@@ -307,8 +322,8 @@ export default function Customers() {
       <div className="flex gap-3 flex-wrap">
         <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-          <input className="input pl-9" placeholder="Search by name, mobile, Aadhaar..." value={search}
-            onChange={e => { setSearch(e.target.value); setPage(1); }} />
+          <input className="input pl-9" placeholder="Search by name, mobile, Aadhaar..." value={searchInput}
+            onChange={e => setSearchInput(e.target.value)} />
         </div>
         <select className="input w-44" value={centerFilter} onChange={e => { setCenterFilter(e.target.value); setPage(1); }}>
           <option value="">All Centers</option>
@@ -512,19 +527,19 @@ export default function Customers() {
                 <input className="input" value={form.alt_mobile} onChange={e => set('alt_mobile', e.target.value)} />
               </div>
               <div>
-                <label className="label">Date of Birth</label>
-                <input type="date" className="input" value={form.dob} onChange={e => set('dob', e.target.value)} />
+                <label className="label">Date of Birth *</label>
+                <input type="date" className={`input ${!form.dob ? 'border-amber-300' : ''}`} value={form.dob} onChange={e => set('dob', e.target.value)} />
               </div>
               <div>
-                <label className="label">Gender</label>
-                <select className="input" value={form.gender} onChange={e => set('gender', e.target.value)}>
+                <label className="label">Gender *</label>
+                <select className={`input ${!form.gender ? 'border-amber-300' : ''}`} value={form.gender} onChange={e => set('gender', e.target.value)}>
                   <option value="">Select</option>
                   <option>Female</option><option>Male</option><option>Other</option>
                 </select>
               </div>
               <div>
-                <label className="label">Aadhaar Number</label>
-                <input className="input" value={form.aadhaar} onChange={e => set('aadhaar', e.target.value)} placeholder="1234 5678 9012" />
+                <label className="label">Aadhaar Number *</label>
+                <input className={`input ${!form.aadhaar ? 'border-amber-300' : ''}`} value={form.aadhaar} onChange={e => set('aadhaar', e.target.value)} placeholder="1234 5678 9012" />
               </div>
               <div>
                 <label className="label">PAN Number</label>
@@ -565,8 +580,8 @@ export default function Customers() {
             <p className="section-title">Address</p>
             <div className="grid grid-cols-2 gap-3">
               <div className="col-span-2">
-                <label className="label">Address</label>
-                <input className="input" value={form.address} onChange={e => set('address', e.target.value)} placeholder="Door No, Street" />
+                <label className="label">Address *</label>
+                <input className={`input ${!form.address ? 'border-amber-300' : ''}`} value={form.address} onChange={e => set('address', e.target.value)} placeholder="Door No, Street" />
               </div>
               <div>
                 <label className="label">City</label>

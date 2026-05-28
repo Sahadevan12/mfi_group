@@ -1,10 +1,57 @@
 import { Router, Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import bcrypt from 'bcryptjs';
+import axios from 'axios';
 import { query, queryOne, execute } from '../database';
 import { authenticate, requireRole } from '../middleware/auth';
 
 const router = Router();
+
+// OTP — Send
+router.post('/send-otp', authenticate, requireRole('admin', 'staff'), async (req: Request, res: Response) => {
+  try {
+    const { mobile } = req.body;
+    if (!mobile) return res.status(400).json({ error: 'Mobile required' });
+
+    const settings = await queryOne<any>('SELECT * FROM sms_settings WHERE id = ?', ['default']);
+    const apiKey = settings?.otp_api_key || settings?.api_key;
+    if (!apiKey) return res.status(400).json({ error: 'OTP API key not configured' });
+
+    const cleanMobile = mobile.replace(/\D/g, '').slice(-10);
+    const res2f = await axios.get(
+      `https://2factor.in/API/V1/${apiKey}/SMS/${cleanMobile}/AUTOGEN`,
+      { timeout: 10000 }
+    );
+
+    if (res2f.data?.Status === 'Success') {
+      return res.json({ success: true, session: res2f.data.Details });
+    }
+    return res.status(400).json({ error: res2f.data?.Details || 'Failed to send OTP' });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// OTP — Verify
+router.post('/verify-otp', authenticate, requireRole('admin', 'staff'), async (req: Request, res: Response) => {
+  try {
+    const { session, otp } = req.body;
+    if (!session || !otp) return res.status(400).json({ error: 'Session and OTP required' });
+
+    const settings = await queryOne<any>('SELECT * FROM sms_settings WHERE id = ?', ['default']);
+    const apiKey = settings?.otp_api_key || settings?.api_key;
+
+    const res2f = await axios.get(
+      `https://2factor.in/API/V1/${apiKey}/SMS/VERIFY/${session}/${otp}`,
+      { timeout: 10000 }
+    );
+
+    const success = res2f.data?.Status === 'Success';
+    return res.json({ success, message: res2f.data?.Details });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
 
 router.get('/', authenticate, async (req: Request, res: Response) => {
   try {
@@ -99,6 +146,23 @@ router.post('/', authenticate, requireRole('admin', 'staff'), async (req: Reques
     } = req.body;
 
     if (!name || !mobile) return res.status(400).json({ error: 'Name and mobile required' });
+    if (!dob)     return res.status(400).json({ error: 'Date of Birth is required' });
+    if (!gender)  return res.status(400).json({ error: 'Gender is required' });
+    if (!aadhaar) return res.status(400).json({ error: 'Aadhaar number is required' });
+
+    if (!address) return res.status(400).json({ error: 'Address is required' });
+
+    // Check duplicate mobile
+    const cleanMobile = mobile.replace(/\D/g, '');
+    const existing = await queryOne<any>(
+      'SELECT id, name FROM customers WHERE mobile = ? AND is_active = 1',
+      [cleanMobile]
+    );
+    if (existing) {
+      return res.status(400).json({
+        error: `Mobile number already registered under customer "${existing.name}"`
+      });
+    }
 
     const id = uuidv4();
     await execute(`
@@ -106,9 +170,12 @@ router.post('/', authenticate, requireRole('admin', 'staff'), async (req: Reques
         aadhaar, pan, dob, gender, photo, nominee_name, nominee_relation, nominee_mobile,
         guarantor_name, guarantor_mobile, guarantor_address, center_id, group_id, created_by)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `, [id, name, mobile, alt_mobile, address, city, state, pincode,
-      aadhaar, pan, dob, gender, photo, nominee_name, nominee_relation, nominee_mobile,
-      guarantor_name, guarantor_mobile, guarantor_address, center_id, group_id, req.user!.id]);
+    `, [id, name, mobile,
+      alt_mobile || null, address, city || null, state || null, pincode || null,
+      aadhaar, pan, dob, gender, photo || null,
+      nominee_name || null, nominee_relation || null, nominee_mobile || null,
+      guarantor_name || null, guarantor_mobile || null, guarantor_address || null,
+      center_id || null, group_id || null, req.user!.id]);
 
     return res.status(201).json({ id, message: 'Customer created' });
   } catch (err: any) {
@@ -132,9 +199,11 @@ router.put('/:id', authenticate, requireRole('admin', 'staff'), async (req: Requ
         aadhaar=?, pan=?, dob=?, gender=?, photo=?, nominee_name=?, nominee_relation=?,
         nominee_mobile=?, guarantor_name=?, guarantor_mobile=?, guarantor_address=?,
         center_id=?, group_id=? WHERE id=?
-    `, [name, mobile, alt_mobile, address, city, state, pincode,
-      aadhaar, pan, dob, gender, photo, nominee_name, nominee_relation, nominee_mobile,
-      guarantor_name, guarantor_mobile, guarantor_address, center_id, group_id, req.params.id]);
+    `, [name, mobile, alt_mobile || null, address, city || null, state || null, pincode || null,
+      aadhaar || null, pan || null, dob || null, gender || null, photo || null,
+      nominee_name || null, nominee_relation || null, nominee_mobile || null,
+      guarantor_name || null, guarantor_mobile || null, guarantor_address || null,
+      center_id || null, group_id || null, req.params.id]);
 
     return res.json({ message: 'Customer updated' });
   } catch (err: any) {
