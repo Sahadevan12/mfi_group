@@ -4,7 +4,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import client from '../api/client';
 import { PageLoader } from '../components/ui/Spinner';
 import { Download, FileSpreadsheet, FileText } from 'lucide-react';
-import { exportPDF, exportExcel } from '../utils/exportUtils';
+import { exportPDF, exportExcel, exportCenterCollectionSheet } from '../utils/exportUtils';
 import { useAuthStore } from '../store/authStore';
 
 // Format date in LOCAL timezone (avoids UTC-shift bug for IST)
@@ -127,6 +127,12 @@ export default function Reports() {
     enabled: tab === 'cashbook',
   });
 
+  const centerSheetQuery = useQuery({
+    queryKey: ['center-collection-sheet', date],
+    queryFn: () => client.get('/reports/center-collection-sheet', { params: { date } }).then(r => r.data),
+    enabled: tab === 'daily',
+  });
+
   const { data: centersList } = useQuery({
     queryKey: ['centers'],
     queryFn: () => client.get('/centers').then(r => r.data),
@@ -177,26 +183,36 @@ export default function Reports() {
         <div className="space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-3">
             <input type="date" className="input w-44" value={date} onChange={e => setDate(e.target.value)} />
-            <ExportBar
-              onPDF={() => exportPDF('Daily Collection Report', [
-                { header: 'Receipt', dataKey: 'receipt_no' },
-                { header: 'Customer', dataKey: 'customer_name' },
-                { header: 'Loan No', dataKey: 'loan_no' },
-                { header: 'Amount', dataKey: 'amount' },
-                { header: 'Mode', dataKey: 'payment_mode' },
-                { header: 'Center', dataKey: 'center_name' },
-                { header: 'Collected By', dataKey: 'collected_by_name' },
-              ], dailyReport.data?.details || [], `Daily_${date}`)}
-              onExcel={() => exportExcel('Daily Collection', [
-                { header: 'Receipt', dataKey: 'receipt_no' },
-                { header: 'Customer', dataKey: 'customer_name' },
-                { header: 'Loan No', dataKey: 'loan_no' },
-                { header: 'Amount', dataKey: 'amount' },
-                { header: 'Mode', dataKey: 'payment_mode' },
-                { header: 'Center', dataKey: 'center_name' },
-                { header: 'Collected By', dataKey: 'collected_by_name' },
-              ], dailyReport.data?.details || [], `Daily_${date}`)}
-            />
+            <div className="flex gap-2 flex-wrap justify-end">
+              <ExportBar
+                onPDF={() => exportPDF('Daily Collection Report', [
+                  { header: 'Receipt', dataKey: 'receipt_no' },
+                  { header: 'Customer', dataKey: 'customer_name' },
+                  { header: 'Loan No', dataKey: 'loan_no' },
+                  { header: 'Amount', dataKey: 'amount' },
+                  { header: 'Mode', dataKey: 'payment_mode' },
+                  { header: 'Center', dataKey: 'center_name' },
+                  { header: 'Collected By', dataKey: 'collected_by_name' },
+                ], dailyReport.data?.details || [], `Daily_${date}`)}
+                onExcel={() => exportExcel('Daily Collection', [
+                  { header: 'Receipt', dataKey: 'receipt_no' },
+                  { header: 'Customer', dataKey: 'customer_name' },
+                  { header: 'Loan No', dataKey: 'loan_no' },
+                  { header: 'Amount', dataKey: 'amount' },
+                  { header: 'Mode', dataKey: 'payment_mode' },
+                  { header: 'Center', dataKey: 'center_name' },
+                  { header: 'Collected By', dataKey: 'collected_by_name' },
+                ], dailyReport.data?.details || [], `Daily_${date}`)}
+              />
+              <button
+                className="btn-secondary text-xs py-1.5 px-3 bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100"
+                onClick={() => centerSheetQuery.data && exportCenterCollectionSheet(centerSheetQuery.data)}
+                disabled={!centerSheetQuery.data}
+                title="Download Center Collection Sheet in Excel format"
+              >
+                <FileSpreadsheet size={13} /> Center Collection Sheet
+              </button>
+            </div>
           </div>
           {dailyReport.isLoading ? <PageLoader /> : dailyReport.data && (
             <>
@@ -784,38 +800,97 @@ export default function Reports() {
               onPDF={() => exportPDF('Cash Book', [
                 { header: 'Date', dataKey: 'date' },
                 { header: 'Type', dataKey: 'type' },
-                { header: 'Amount', dataKey: 'amount' },
-              ], [...(cashbook.data?.income || []), ...(cashbook.data?.expenses || [])])}
+                { header: 'Amount (₹)', dataKey: 'amount' },
+              ], [
+                ...(cashbook.data?.income || []).map((i: any) => ({ ...i, type: 'Collection (Income)' })),
+                ...(cashbook.data?.disbursements || []).map((d: any) => ({ ...d, type: `Loan Disbursed (${d.count} loans)` })),
+                ...(cashbook.data?.expenses || []).map((e: any) => ({ ...e, type: `Expense – ${e.type}` })),
+              ])}
               onExcel={() => exportExcel('Cash Book', [
                 { header: 'Date', dataKey: 'date' },
                 { header: 'Type', dataKey: 'type' },
-                { header: 'Amount', dataKey: 'amount' },
-              ], [...(cashbook.data?.income || []), ...(cashbook.data?.expenses || [])])}
+                { header: 'Amount (₹)', dataKey: 'amount' },
+                { header: 'Loan Nos', dataKey: 'loan_nos' },
+              ], [
+                ...(cashbook.data?.income || []).map((i: any) => ({ ...i, type: 'Collection (Income)', loan_nos: '' })),
+                ...(cashbook.data?.disbursements || []).map((d: any) => ({ ...d, type: `Loan Disbursed (${d.count})`, loan_nos: d.loan_nos })),
+                ...(cashbook.data?.expenses || []).map((e: any) => ({ ...e, type: `Expense – ${e.type}`, loan_nos: '' })),
+              ])}
             />
           </div>
           {cashbook.isLoading ? <PageLoader /> : cashbook.data && (
             <>
-              <div className="grid grid-cols-3 gap-3">
-                <div className="card"><p className="text-xs text-slate-500">Total Income</p><p className="text-xl font-bold text-emerald-700">₹{cashbook.data.totalIncome?.toLocaleString('en-IN')}</p></div>
-                <div className="card"><p className="text-xs text-slate-500">Total Expenses</p><p className="text-xl font-bold text-red-600">₹{cashbook.data.totalExpenses?.toLocaleString('en-IN')}</p></div>
-                <div className="card"><p className="text-xs text-slate-500">Net</p><p className={`text-xl font-bold ${cashbook.data.netProfit >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>₹{cashbook.data.netProfit?.toLocaleString('en-IN')}</p></div>
+              {/* Summary cards */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="card border-l-4 border-emerald-500">
+                  <p className="text-xs text-slate-500">Collections (In)</p>
+                  <p className="text-xl font-bold text-emerald-700">₹{Number(cashbook.data.totalIncome || 0).toLocaleString('en-IN')}</p>
+                </div>
+                <div className="card border-l-4 border-blue-500">
+                  <p className="text-xs text-slate-500">Loans Disbursed (Out)</p>
+                  <p className="text-xl font-bold text-blue-700">₹{Number(cashbook.data.totalDisbursed || 0).toLocaleString('en-IN')}</p>
+                </div>
+                <div className="card border-l-4 border-red-500">
+                  <p className="text-xs text-slate-500">Expenses (Out)</p>
+                  <p className="text-xl font-bold text-red-600">₹{Number(cashbook.data.totalExpenses || 0).toLocaleString('en-IN')}</p>
+                </div>
+                <div className={`card border-l-4 ${cashbook.data.netProfit >= 0 ? 'border-navy-600' : 'border-red-600'}`}>
+                  <p className="text-xs text-slate-500">Net Balance</p>
+                  <p className={`text-xl font-bold ${cashbook.data.netProfit >= 0 ? 'text-navy-800' : 'text-red-600'}`}>
+                    ₹{Number(cashbook.data.netProfit || 0).toLocaleString('en-IN')}
+                  </p>
+                </div>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* Collections */}
                 <div className="card">
-                  <h3 className="font-semibold text-navy-900 mb-3 text-sm">Income</h3>
+                  <h3 className="font-semibold text-emerald-700 mb-3 text-sm flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span>Collections (Income)
+                  </h3>
                   <div className="space-y-1 max-h-64 overflow-y-auto">
                     {cashbook.data.income?.map((i: any) => (
-                      <div key={i.date} className="flex justify-between text-sm py-1 border-b border-slate-50"><span className="text-slate-500">{i.date}</span><span className="text-emerald-700 font-medium">₹{i.amount?.toLocaleString('en-IN')}</span></div>
+                      <div key={i.date} className="flex justify-between text-sm py-1 border-b border-slate-50">
+                        <span className="text-slate-500">{i.date}</span>
+                        <span className="text-emerald-700 font-medium">₹{Number(i.amount).toLocaleString('en-IN')}</span>
+                      </div>
                     ))}
+                    {!cashbook.data.income?.length && <p className="text-sm text-slate-400 text-center py-3">No collections</p>}
                   </div>
                 </div>
+
+                {/* Loan Disbursements */}
                 <div className="card">
-                  <h3 className="font-semibold text-navy-900 mb-3 text-sm">Expenses</h3>
+                  <h3 className="font-semibold text-blue-700 mb-3 text-sm flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-blue-500 inline-block"></span>Loans Disbursed (Out)
+                  </h3>
+                  <div className="space-y-1 max-h-64 overflow-y-auto">
+                    {cashbook.data.disbursements?.map((d: any, i: number) => (
+                      <div key={i} className="py-1.5 border-b border-slate-50">
+                        <div className="flex justify-between text-sm">
+                          <span className="text-slate-500">{d.date}</span>
+                          <span className="text-blue-700 font-medium">₹{Number(d.amount).toLocaleString('en-IN')}</span>
+                        </div>
+                        <p className="text-xs text-slate-400 mt-0.5">{d.count} loan{d.count > 1 ? 's' : ''} — {d.loan_nos}</p>
+                      </div>
+                    ))}
+                    {!cashbook.data.disbursements?.length && <p className="text-sm text-slate-400 text-center py-3">No disbursements</p>}
+                  </div>
+                </div>
+
+                {/* Expenses */}
+                <div className="card">
+                  <h3 className="font-semibold text-red-600 mb-3 text-sm flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-red-500 inline-block"></span>Expenses (Out)
+                  </h3>
                   <div className="space-y-1 max-h-64 overflow-y-auto">
                     {cashbook.data.expenses?.map((e: any, i: number) => (
-                      <div key={i} className="flex justify-between text-sm py-1 border-b border-slate-50"><span className="text-slate-500">{e.date} – {e.type}</span><span className="text-red-600 font-medium">₹{e.amount?.toLocaleString('en-IN')}</span></div>
+                      <div key={i} className="flex justify-between text-sm py-1 border-b border-slate-50">
+                        <span className="text-slate-500">{e.date} – <span className="capitalize">{e.type}</span></span>
+                        <span className="text-red-600 font-medium">₹{Number(e.amount).toLocaleString('en-IN')}</span>
+                      </div>
                     ))}
-                    {(!cashbook.data.expenses?.length) && <p className="text-sm text-slate-400 text-center py-3">No expenses</p>}
+                    {!cashbook.data.expenses?.length && <p className="text-sm text-slate-400 text-center py-3">No expenses</p>}
                   </div>
                 </div>
               </div>

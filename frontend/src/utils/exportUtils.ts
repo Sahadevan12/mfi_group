@@ -54,6 +54,94 @@ export function exportExcel(
   XLSX.writeFile(wb, filename || `${sheetName.replace(/\s+/g, '_')}_${format(new Date(), 'yyyyMMdd')}.xlsx`);
 }
 
+// ─── Center Collection Sheet (matches SPS_Center_Collection_Sheet.xlsx format) ───
+export function exportCenterCollectionSheet(data: {
+  date: string;
+  centers: Array<{
+    name: string;
+    area?: string;
+    meeting_day?: string;
+    meeting_time?: string;
+    members: Array<{
+      name: string;
+      mobile: string;
+      loan_amount: number;
+      emi_amount: number;
+      installment_no?: number;
+      paid_today?: number;
+    }>;
+  }>;
+}) {
+  const wb = XLSX.utils.book_new();
+  const displayDate = (() => {
+    const [y, m, d] = data.date.split('-');
+    return `${d}/${m}/${y}`;
+  })();
+
+  for (const center of data.centers) {
+    const rows: any[][] = [];
+
+    rows.push(['SPS GROUP FOUNDATION', '', '', '', '', '', '', '', '', '', '']);
+    rows.push(['WEEKLY CENTER COLLECTION SHEET', '', '', '', '', '', '', '', '', '', '']);
+    rows.push(['28, Street Kallamozhi, Udangudi, Tuticorin | PH: 04639-243023 | CELL: 9788130671', '', '', '', '', '', '', '', '', '', '']);
+    rows.push([]);
+    rows.push([
+      'DAY ORDER:', center.meeting_day || '',  '',
+      'CENTER NAME:', center.name,             '',
+      'DATE:', displayDate,                    '',
+      'CENTER TIME:', center.meeting_time || ''
+    ]);
+    rows.push([]);
+    rows.push(['S.NO', 'MEMBER NAME', 'MOBILE NUMBER', 'LOAN AMOUNT', 'EMI', 'PAID WEEK', 'RM SIGN', '', '', '', '']);
+
+    center.members.forEach((m, idx) => {
+      rows.push([idx + 1, m.name, m.mobile, m.loan_amount, m.emi_amount, m.installment_no || '', '', '', '', '', '']);
+    });
+
+    // Filler rows up to 10
+    for (let i = center.members.length + 1; i <= 10; i++) {
+      rows.push([i, '', '', '', '', '', '', '', '', '', '']);
+    }
+
+    rows.push(['TOTAL', '', '', '', '', '', '', '', '', '', '']);
+    rows.push([]);
+    rows.push(['TOTAL CASH :', '', '', 'BM SIGN:', '', '', 'CENTER LEADER SIGN:', '', '', '', '']);
+
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols'] = [
+      { wch: 6 }, { wch: 26 }, { wch: 14 }, { wch: 14 },
+      { wch: 10 }, { wch: 12 }, { wch: 12 }, { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 8 },
+    ];
+    ws['!merges'] = [
+      { s: { r: 0, c: 0 }, e: { r: 0, c: 10 } },
+      { s: { r: 1, c: 0 }, e: { r: 1, c: 10 } },
+      { s: { r: 2, c: 0 }, e: { r: 2, c: 10 } },
+    ];
+
+    const sheetName = center.name.substring(0, 31).replace(/[\[\]:*?/\\]/g, '_');
+    XLSX.utils.book_append_sheet(wb, ws, sheetName);
+  }
+
+  // Denomination sheet
+  const denomRows = [
+    ['DENOMINATION SHEET', '', '', '', ''],
+    [],
+    ['S.NO', 'NOTE', 'COUNT', 'RUPEES', ''],
+    [1, '500', '', '', ''], [2, '200', '', '', ''], [3, '100', '', '', ''],
+    [4, '50', '', '', ''],  [5, '20', '', '', ''],  [6, '10', '', '', ''],
+    [7, '20 COIN', '', '', ''], [8, '10 COIN', '', '', ''], [9, '5 COIN', '', '', ''],
+    [10, 'COINS', '', '', ''],
+    ['TOTAL', '', '', '', ''],
+    [],
+    ['CENTER LEADER SIGN:', '', '', '', ''],
+  ];
+  const denomWs = XLSX.utils.aoa_to_sheet(denomRows);
+  denomWs['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 4 } }];
+  XLSX.utils.book_append_sheet(wb, denomWs, 'Denomination');
+
+  XLSX.writeFile(wb, `Center_Collection_Sheet_${data.date}.xlsx`);
+}
+
 export function exportReceiptPDF(receipt: {
   receipt_no: string;
   amount: number;

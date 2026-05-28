@@ -473,16 +473,82 @@ router.get('/cashbook', authenticate, async (req: Request, res: Response) => {
       GROUP BY payment_date ORDER BY payment_date
     `, [from, to]);
 
+    // Loan disbursements (cash outflow)
+    const disbursements = await query<any>(`
+      SELECT disbursement_date as date, 'Loan Disbursed' as type,
+             COUNT(*) as count, SUM(amount) as amount,
+             GROUP_CONCAT(loan_no SEPARATOR ', ') as loan_nos
+      FROM loans
+      WHERE disbursement_date BETWEEN ? AND ?
+        AND status IN ('active', 'closed', 'written_off', 'pending')
+      GROUP BY disbursement_date ORDER BY disbursement_date
+    `, [from, to]);
+
     const expenses = await query<any>(`
       SELECT expense_date as date, category as type, SUM(amount) as amount
       FROM expenses WHERE expense_date BETWEEN ? AND ?
       GROUP BY expense_date, category ORDER BY expense_date
     `, [from, to]);
 
-    const totalIncome = income.reduce((s: number, r: any) => s + r.amount, 0);
-    const totalExpenses = expenses.reduce((s: number, r: any) => s + r.amount, 0);
+    const totalIncome = income.reduce((s: number, r: any) => s + Number(r.amount), 0);
+    const totalDisbursed = disbursements.reduce((s: number, r: any) => s + Number(r.amount), 0);
+    const totalExpenses = expenses.reduce((s: number, r: any) => s + Number(r.amount), 0);
 
-    return res.json({ income, expenses, totalIncome, totalExpenses, netProfit: totalIncome - totalExpenses });
+    return res.json({
+      income, disbursements, expenses,
+      totalIncome, totalDisbursed, totalExpenses,
+      netProfit: totalIncome - totalDisbursed - totalExpenses
+    });
+  } catch (err: any) {
+    console.error(err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// Center Collection Sheet — per-center member list for a given date
+router.get('/center-collection-sheet', authenticate, async (req: Request, res: Response) => {
+  try {
+    const { date, center_id } = req.query;
+    const reportDate = (date as string) || new Date().toISOString().split('T')[0];
+
+    const centerWhere = center_id ? 'AND ce.id = ?' : '';
+    const centerParams: any[] = center_id ? [center_id] : [];
+
+    const centers = await query<any>(`
+      SELECT DISTINCT ce.id, ce.name, ce.area, ce.meeting_day, ce.meeting_time
+      FROM centers ce
+      JOIN customers cu ON cu.center_id = ce.id AND cu.is_active = 1
+      JOIN loans l ON l.customer_id = cu.id AND l.status = 'active'
+      WHERE ce.is_active = 1 ${centerWhere}
+      ORDER BY ce.name
+    `, centerParams);
+
+    const result = [];
+    for (const center of centers) {
+      const members = await query<any>(`
+        SELECT cu.id, cu.name, cu.mobile,
+               l.loan_no, l.amount as loan_amount, l.emi_amount,
+               (
+                 SELECT ls.installment_no
+                 FROM loan_schedule ls
+                 WHERE ls.loan_id = l.id
+                 ORDER BY ABS(DATEDIFF(ls.due_date, ?))
+                 LIMIT 1
+               ) as installment_no,
+               COALESCE((
+                 SELECT SUM(col.amount) FROM collections col
+                 WHERE col.loan_id = l.id AND col.payment_date = ?
+               ), 0) as paid_today
+        FROM customers cu
+        JOIN loans l ON l.customer_id = cu.id AND l.status = 'active'
+        WHERE cu.center_id = ? AND cu.is_active = 1
+        ORDER BY cu.name
+      `, [reportDate, reportDate, center.id]);
+
+      result.push({ ...center, members });
+    }
+
+    return res.json({ date: reportDate, centers: result });
   } catch (err: any) {
     console.error(err);
     return res.status(500).json({ error: err.message });
