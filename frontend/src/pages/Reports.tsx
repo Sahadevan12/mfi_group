@@ -4,7 +4,19 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import client from '../api/client';
 import { PageLoader } from '../components/ui/Spinner';
 import { Download, FileSpreadsheet, FileText } from 'lucide-react';
-import { exportPDF, exportExcel, exportCenterCollectionSheet } from '../utils/exportUtils';
+import {
+  exportCenterCollectionSheet,
+  exportDailyPDF, exportDailyExcel,
+  exportWeeklyPDF, exportWeeklyExcel,
+  exportMonthlyPDF, exportMonthlyExcel,
+  exportPendingPDF, exportPendingExcel,
+  exportDefaultersPDF, exportDefaultersExcel,
+  exportCenterWisePDF, exportCenterWiseExcel,
+  exportGroupWisePDF, exportGroupWiseExcel,
+  exportAgentWisePDF, exportAgentWiseExcel,
+  exportPLPDF, exportPLExcel,
+  exportCashbookPDF, exportCashbookExcel,
+} from '../utils/exportUtils';
 import { useAuthStore } from '../store/authStore';
 
 // Format date in LOCAL timezone (avoids UTC-shift bug for IST)
@@ -185,24 +197,8 @@ export default function Reports() {
             <input type="date" className="input w-44" value={date} onChange={e => setDate(e.target.value)} />
             <div className="flex gap-2 flex-wrap justify-end">
               <ExportBar
-                onPDF={() => exportPDF('Daily Collection Report', [
-                  { header: 'Receipt', dataKey: 'receipt_no' },
-                  { header: 'Customer', dataKey: 'customer_name' },
-                  { header: 'Loan No', dataKey: 'loan_no' },
-                  { header: 'Amount', dataKey: 'amount' },
-                  { header: 'Mode', dataKey: 'payment_mode' },
-                  { header: 'Center', dataKey: 'center_name' },
-                  { header: 'Collected By', dataKey: 'collected_by_name' },
-                ], dailyReport.data?.details || [], `Daily_${date}`)}
-                onExcel={() => exportExcel('Daily Collection', [
-                  { header: 'Receipt', dataKey: 'receipt_no' },
-                  { header: 'Customer', dataKey: 'customer_name' },
-                  { header: 'Loan No', dataKey: 'loan_no' },
-                  { header: 'Amount', dataKey: 'amount' },
-                  { header: 'Mode', dataKey: 'payment_mode' },
-                  { header: 'Center', dataKey: 'center_name' },
-                  { header: 'Collected By', dataKey: 'collected_by_name' },
-                ], dailyReport.data?.details || [], `Daily_${date}`)}
+                onPDF={() => dailyReport.data && exportDailyPDF(dailyReport.data, date)}
+                onExcel={() => dailyReport.data && exportDailyExcel(dailyReport.data, date)}
               />
               <button
                 className="btn-secondary text-xs py-1.5 px-3 bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100"
@@ -270,22 +266,8 @@ export default function Reports() {
               <input type="date" className="input w-44" value={weekStart} onChange={e => setWeekStart(e.target.value)} />
             </div>
             <ExportBar
-              onPDF={() => exportPDF('Weekly Collection Report', [
-                { header: 'Receipt', dataKey: 'receipt_no' },
-                { header: 'Date', dataKey: 'payment_date' },
-                { header: 'Customer', dataKey: 'customer_name' },
-                { header: 'Amount', dataKey: 'amount' },
-                { header: 'Center', dataKey: 'center_name' },
-                { header: 'Group', dataKey: 'group_name' },
-              ], weeklyReport.data?.details || [])}
-              onExcel={() => exportExcel('Weekly Collection', [
-                { header: 'Receipt', dataKey: 'receipt_no' },
-                { header: 'Date', dataKey: 'payment_date' },
-                { header: 'Customer', dataKey: 'customer_name' },
-                { header: 'Amount', dataKey: 'amount' },
-                { header: 'Center', dataKey: 'center_name' },
-                { header: 'Group', dataKey: 'group_name' },
-              ], weeklyReport.data?.details || [])}
+              onPDF={() => weeklyReport.data && exportWeeklyPDF(weeklyReport.data)}
+              onExcel={() => weeklyReport.data && exportWeeklyExcel(weeklyReport.data)}
             />
           </div>
           {weeklyReport.isLoading ? <PageLoader /> : weeklyReport.isError ? (
@@ -355,16 +337,8 @@ export default function Reports() {
           <div className="flex items-center justify-between flex-wrap gap-3">
             <input type="month" className="input w-44" value={month} onChange={e => setMonth(e.target.value)} />
             <ExportBar
-              onPDF={() => exportPDF('Monthly Collection', [
-                { header: 'Date', dataKey: 'payment_date' },
-                { header: 'Amount', dataKey: 'amount' },
-                { header: 'Transactions', dataKey: 'transactions' },
-              ], monthlyReport.data?.daily || [])}
-              onExcel={() => exportExcel('Monthly Collection', [
-                { header: 'Date', dataKey: 'payment_date' },
-                { header: 'Amount', dataKey: 'amount' },
-                { header: 'Transactions', dataKey: 'transactions' },
-              ], monthlyReport.data?.daily || [])}
+              onPDF={() => monthlyReport.data && exportMonthlyPDF(monthlyReport.data)}
+              onExcel={() => monthlyReport.data && exportMonthlyExcel(monthlyReport.data)}
             />
           </div>
           {monthlyReport.isLoading ? <PageLoader /> : monthlyReport.data && (
@@ -395,24 +369,8 @@ export default function Reports() {
       {tab === 'pending' && (
         <div className="space-y-4">
           <ExportBar
-            onPDF={() => exportPDF('Pending Dues Report', [
-              { header: 'Customer', dataKey: 'customer_name' },
-              { header: 'Mobile', dataKey: 'mobile' },
-              { header: 'Loan No', dataKey: 'loan_no' },
-              { header: 'Pending Amount', dataKey: 'pending_amount' },
-              { header: 'Installments', dataKey: 'pending_installments' },
-              { header: 'Days Overdue', dataKey: 'max_days_overdue' },
-              { header: 'Center', dataKey: 'center_name' },
-            ], pendingReport.data?.dues || [])}
-            onExcel={() => exportExcel('Pending Dues', [
-              { header: 'Customer', dataKey: 'customer_name' },
-              { header: 'Mobile', dataKey: 'mobile' },
-              { header: 'Loan No', dataKey: 'loan_no' },
-              { header: 'Pending Amount', dataKey: 'pending_amount' },
-              { header: 'Installments', dataKey: 'pending_installments' },
-              { header: 'Days Overdue', dataKey: 'max_days_overdue' },
-              { header: 'Center', dataKey: 'center_name' },
-            ], pendingReport.data?.dues || [])}
+            onPDF={() => pendingReport.data && exportPendingPDF(pendingReport.data)}
+            onExcel={() => pendingReport.data && exportPendingExcel(pendingReport.data)}
           />
           {pendingReport.isLoading ? <PageLoader /> : pendingReport.data && (
             <>
@@ -453,22 +411,8 @@ export default function Reports() {
       {tab === 'defaulters' && (
         <div className="space-y-4">
           <ExportBar
-            onPDF={() => exportPDF('Defaulters Report', [
-              { header: 'Customer', dataKey: 'name' },
-              { header: 'Mobile', dataKey: 'mobile' },
-              { header: 'Loan No', dataKey: 'loan_no' },
-              { header: 'Outstanding', dataKey: 'outstanding' },
-              { header: 'Days Overdue', dataKey: 'days_overdue' },
-              { header: 'Center', dataKey: 'center_name' },
-            ], defaultersReport.data || [])}
-            onExcel={() => exportExcel('Defaulters', [
-              { header: 'Customer', dataKey: 'name' },
-              { header: 'Mobile', dataKey: 'mobile' },
-              { header: 'Loan No', dataKey: 'loan_no' },
-              { header: 'Outstanding', dataKey: 'outstanding' },
-              { header: 'Days Overdue', dataKey: 'days_overdue' },
-              { header: 'Center', dataKey: 'center_name' },
-            ], defaultersReport.data || [])}
+            onPDF={() => exportDefaultersPDF(defaultersReport.data || [])}
+            onExcel={() => exportDefaultersExcel(defaultersReport.data || [])}
           />
           {defaultersReport.isLoading ? <PageLoader /> : (
             <div className="card p-0 overflow-hidden">
@@ -517,22 +461,8 @@ export default function Reports() {
               </div>
             </div>
             <ExportBar
-              onPDF={() => exportPDF('Center-wise Report', [
-                { header: 'Center', dataKey: 'name' },
-                { header: 'Area', dataKey: 'area' },
-                { header: 'Customers', dataKey: 'customers' },
-                { header: 'Active Loans', dataKey: 'active_loans' },
-                { header: 'Collected', dataKey: 'collected' },
-                { header: 'Pending', dataKey: 'pending_installments' },
-              ], centerReport.data || [])}
-              onExcel={() => exportExcel('Center-wise', [
-                { header: 'Center', dataKey: 'name' },
-                { header: 'Area', dataKey: 'area' },
-                { header: 'Customers', dataKey: 'customers' },
-                { header: 'Active Loans', dataKey: 'active_loans' },
-                { header: 'Collected', dataKey: 'collected' },
-                { header: 'Pending', dataKey: 'pending_installments' },
-              ], centerReport.data || [])}
+              onPDF={() => exportCenterWisePDF(centerReport.data || [], startDate, endDate)}
+              onExcel={() => exportCenterWiseExcel(centerReport.data || [], startDate, endDate)}
             />
           </div>
           {centerReport.isLoading ? <PageLoader /> : (
@@ -587,22 +517,8 @@ export default function Reports() {
               </div>
             </div>
             <ExportBar
-              onPDF={() => exportPDF('Group-wise Report', [
-                { header: 'Group', dataKey: 'group_name' },
-                { header: 'Center', dataKey: 'center_name' },
-                { header: 'Members', dataKey: 'members' },
-                { header: 'Active Loans', dataKey: 'active_loans' },
-                { header: 'Collected', dataKey: 'collected' },
-                { header: 'Pending Amt', dataKey: 'pending_amount' },
-              ], groupReport.data || [])}
-              onExcel={() => exportExcel('Group-wise', [
-                { header: 'Group', dataKey: 'group_name' },
-                { header: 'Center', dataKey: 'center_name' },
-                { header: 'Members', dataKey: 'members' },
-                { header: 'Active Loans', dataKey: 'active_loans' },
-                { header: 'Collected', dataKey: 'collected' },
-                { header: 'Pending Amt', dataKey: 'pending_amount' },
-              ], groupReport.data || [])}
+              onPDF={() => exportGroupWisePDF(groupReport.data || [], startDate, endDate)}
+              onExcel={() => exportGroupWiseExcel(groupReport.data || [], startDate, endDate)}
             />
           </div>
           {groupReport.isLoading ? <PageLoader /> : (
@@ -645,20 +561,8 @@ export default function Reports() {
           <div className="flex items-center justify-between flex-wrap gap-3">
             <DateRangeFilter startDate={startDate} endDate={endDate} onStart={setStartDate} onEnd={setEndDate} />
             <ExportBar
-              onPDF={() => exportPDF('Agent-wise Report', [
-                { header: 'Agent', dataKey: 'name' },
-                { header: 'Collections', dataKey: 'total_collections' },
-                { header: 'Total Amount', dataKey: 'total_amount' },
-                { header: 'Customers', dataKey: 'unique_customers' },
-                { header: 'Working Days', dataKey: 'working_days' },
-              ], agentReport.data?.agents || [])}
-              onExcel={() => exportExcel('Agent-wise', [
-                { header: 'Agent', dataKey: 'name' },
-                { header: 'Collections', dataKey: 'total_collections' },
-                { header: 'Total Amount', dataKey: 'total_amount' },
-                { header: 'Customers', dataKey: 'unique_customers' },
-                { header: 'Working Days', dataKey: 'working_days' },
-              ], agentReport.data?.agents || [])}
+              onPDF={() => agentReport.data && exportAgentWisePDF(agentReport.data)}
+              onExcel={() => agentReport.data && exportAgentWiseExcel(agentReport.data)}
             />
           </div>
           {agentReport.isLoading ? <PageLoader /> : agentReport.data && (
@@ -716,28 +620,8 @@ export default function Reports() {
           <div className="flex items-center justify-between flex-wrap gap-3">
             <DateRangeFilter startDate={startDate} endDate={endDate} onStart={setStartDate} onEnd={setEndDate} />
             <ExportBar
-              onPDF={() => exportPDF('Profit & Loss', [
-                { header: 'Item', dataKey: 'item' },
-                { header: 'Amount', dataKey: 'amount' },
-              ], plReport.data ? [
-                { item: 'Total Collected', amount: plReport.data.income?.total_collected },
-                { item: 'Interest Income', amount: plReport.data.income?.interest_income },
-                { item: 'Penalty Income', amount: plReport.data.income?.penalty_income },
-                { item: 'Processing Fees', amount: plReport.data.income?.processing_fees },
-                { item: 'Total Expenses', amount: plReport.data.expenses?.total },
-                { item: 'Net Profit', amount: plReport.data.net_profit },
-              ] : [])}
-              onExcel={() => exportExcel('Profit & Loss', [
-                { header: 'Item', dataKey: 'item' },
-                { header: 'Amount', dataKey: 'amount' },
-              ], plReport.data ? [
-                { item: 'Total Collected', amount: plReport.data.income?.total_collected },
-                { item: 'Interest Income', amount: plReport.data.income?.interest_income },
-                { item: 'Penalty Income', amount: plReport.data.income?.penalty_income },
-                { item: 'Processing Fees', amount: plReport.data.income?.processing_fees },
-                { item: 'Total Expenses', amount: plReport.data.expenses?.total },
-                { item: 'Net Profit', amount: plReport.data.net_profit },
-              ] : [])}
+              onPDF={() => plReport.data && exportPLPDF(plReport.data)}
+              onExcel={() => plReport.data && exportPLExcel(plReport.data)}
             />
           </div>
           {plReport.isLoading ? <PageLoader /> : plReport.data && (
@@ -797,25 +681,8 @@ export default function Reports() {
           <div className="flex items-center justify-between flex-wrap gap-3">
             <DateRangeFilter startDate={startDate} endDate={endDate} onStart={setStartDate} onEnd={setEndDate} />
             <ExportBar
-              onPDF={() => exportPDF('Cash Book', [
-                { header: 'Date', dataKey: 'date' },
-                { header: 'Type', dataKey: 'type' },
-                { header: 'Amount (₹)', dataKey: 'amount' },
-              ], [
-                ...(cashbook.data?.income || []).map((i: any) => ({ ...i, type: 'Collection (Income)' })),
-                ...(cashbook.data?.disbursements || []).map((d: any) => ({ ...d, type: `Loan Disbursed (${d.count} loans)` })),
-                ...(cashbook.data?.expenses || []).map((e: any) => ({ ...e, type: `Expense – ${e.type}` })),
-              ])}
-              onExcel={() => exportExcel('Cash Book', [
-                { header: 'Date', dataKey: 'date' },
-                { header: 'Type', dataKey: 'type' },
-                { header: 'Amount (₹)', dataKey: 'amount' },
-                { header: 'Loan Nos', dataKey: 'loan_nos' },
-              ], [
-                ...(cashbook.data?.income || []).map((i: any) => ({ ...i, type: 'Collection (Income)', loan_nos: '' })),
-                ...(cashbook.data?.disbursements || []).map((d: any) => ({ ...d, type: `Loan Disbursed (${d.count})`, loan_nos: d.loan_nos })),
-                ...(cashbook.data?.expenses || []).map((e: any) => ({ ...e, type: `Expense – ${e.type}`, loan_nos: '' })),
-              ])}
+              onPDF={() => cashbook.data && exportCashbookPDF(cashbook.data, startDate, endDate)}
+              onExcel={() => cashbook.data && exportCashbookExcel(cashbook.data, startDate, endDate)}
             />
           </div>
           {cashbook.isLoading ? <PageLoader /> : cashbook.data && (
