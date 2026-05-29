@@ -187,7 +187,7 @@ class XlsBuilder {
     const r3 = this.r;
     this.row([
       xc(title, { font: { name: 'Arial', sz: 13, bold: true, color: { rgb: XL.NAVY } }, alignment: { horizontal: 'left', vertical: 'center' } }),
-      ...Array(Math.max(nc - 2, 0)).fill(xc('', {})),
+      ...Array(Math.max(nc - 2, 0)).fill(xc('', { font: { name: 'Arial', sz: 13 }, alignment: { horizontal: 'left', vertical: 'center' } })),
       xc(`Generated: ${ts()}`, { font: { name: 'Arial', sz: 8, color: { rgb: 'AAAAAA' } }, alignment: { horizontal: 'right', vertical: 'center' } }),
     ], 20);
     if (nc > 2) this.mrg(r3, 0, r3, nc - 2);
@@ -195,7 +195,7 @@ class XlsBuilder {
     // Row 4 — Period
     const r4 = this.r;
     this.row([xc(period, { font: { name: 'Arial', sz: 9, color: { rgb: '555555' } }, alignment: { horizontal: 'left', vertical: 'center' } }),
-      ...Array(nc - 1).fill(xc('', {}))], 13);
+      ...Array(nc - 1).fill(xc('', { font: { name: 'Arial', sz: 9 } }))], 13);
     this.mrg(r4, 0, r4, nc - 1);
 
     this.gap();
@@ -272,16 +272,19 @@ class XlsBuilder {
     // Header row
     this.row(headers.map(h => xc(h, thStyle)), 18);
 
-    // Data rows (alternating)
+    const whiteFill = { patternType: 'solid', fgColor: { rgb: 'FFFFFF' } };
+    const altRowFill = { patternType: 'solid', fgColor: { rgb: XL.GRAY_BG } };
+
+    // Data rows (alternating white / light-gray)
     rows.forEach((row, ri) => {
-      const altFill = ri % 2 === 1 ? { patternType: 'solid', fgColor: { rgb: XL.GRAY_BG } } : {};
+      const fill = ri % 2 === 1 ? altRowFill : whiteFill;
       const cells = row.map((v, ci) => {
         const isNum = typeof v === 'number';
         const align = rightCols.includes(ci) || isNum ? 'right' : 'left';
         return { v: v ?? '', t: (isNum ? 'n' : 's') as any,
-          s: { font: { name: 'Arial', sz: 8.5 }, fill: altFill, alignment: { horizontal: align, vertical: 'center' }, border: brd() } };
+          s: { font: { name: 'Arial', sz: 8.5, color: { rgb: '222222' } }, fill, alignment: { horizontal: align, vertical: 'center' }, border: brd() } };
       });
-      while (cells.length < this.ncols) cells.push(xc('', { border: brd() }));
+      while (cells.length < this.ncols) cells.push(xc('', { fill: whiteFill, border: brd() }));
       this.row(cells, 15);
     });
 
