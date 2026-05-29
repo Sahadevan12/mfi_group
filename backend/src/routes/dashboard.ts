@@ -152,6 +152,94 @@ router.get('/monthly-trend', authenticate, async (req: Request, res: Response) =
   }
 });
 
+// Staff-specific dashboard stats — only their own data
+router.get('/staff-stats', authenticate, async (req: Request, res: Response) => {
+  try {
+    const staffId = req.user!.id;
+    const today = new Date().toISOString().split('T')[0];
+    const monthStr = today.substring(0, 7);
+
+    const todayCollection = (await queryOne<any>(
+      'SELECT COALESCE(SUM(amount), 0) as s FROM collections WHERE collected_by = ? AND payment_date = ?',
+      [staffId, today]
+    ))?.s || 0;
+
+    const monthCollection = (await queryOne<any>(
+      "SELECT COALESCE(SUM(amount), 0) as s FROM collections WHERE collected_by = ? AND DATE_FORMAT(payment_date, '%Y-%m') = ?",
+      [staffId, monthStr]
+    ))?.s || 0;
+
+    const totalCollection = (await queryOne<any>(
+      'SELECT COALESCE(SUM(amount), 0) as s FROM collections WHERE collected_by = ?',
+      [staffId]
+    ))?.s || 0;
+
+    const todayTransactions = (await queryOne<any>(
+      'SELECT COUNT(*) as c FROM collections WHERE collected_by = ? AND payment_date = ?',
+      [staffId, today]
+    ))?.c || 0;
+
+    const myCenters = await query<any>(`
+      SELECT ce.id, ce.name, ce.area,
+             COUNT(DISTINCT cu.id) as customers,
+             COUNT(DISTINCT CASE WHEN l.status = 'active' THEN l.id END) as active_loans,
+             COALESCE((
+               SELECT SUM(c2.amount) FROM collections c2
+               JOIN customers cu2 ON c2.customer_id = cu2.id
+               WHERE cu2.center_id = ce.id
+             ), 0) as total_collected
+      FROM centers ce
+      LEFT JOIN customers cu ON cu.center_id = ce.id AND cu.is_active = 1
+      LEFT JOIN loans l ON l.customer_id = cu.id
+      WHERE ce.staff_id = ? AND ce.is_active = 1
+      GROUP BY ce.id
+    `, [staffId]);
+
+    const myCustomers = myCenters.reduce((s: number, c: any) => s + Number(c.customers), 0);
+    const myActiveLoans = myCenters.reduce((s: number, c: any) => s + Number(c.active_loans), 0);
+
+    const myPending = await queryOne<any>(`
+      SELECT COUNT(DISTINCT ls.loan_id) as cnt,
+             COALESCE(SUM(ls.emi_amount - ls.paid_amount), 0) as amount
+      FROM loan_schedule ls
+      JOIN loans l ON ls.loan_id = l.id AND l.status = 'active'
+      JOIN customers cu ON l.customer_id = cu.id
+      JOIN centers ce ON cu.center_id = ce.id
+      WHERE ce.staff_id = ? AND ls.status IN ('pending','overdue') AND ls.due_date <= ?
+    `, [staffId, today]);
+
+    const recentCollections = await query<any>(`
+      SELECT col.id, col.receipt_no, col.amount, col.payment_date, col.payment_mode,
+             cu.name as customer_name, cu.mobile,
+             ce.name as center_name
+      FROM collections col
+      JOIN customers cu ON col.customer_id = cu.id
+      LEFT JOIN centers ce ON cu.center_id = ce.id
+      WHERE col.collected_by = ?
+      ORDER BY col.created_at DESC LIMIT 15
+    `, [staffId]);
+
+    const monthlyTrend = await query<any>(`
+      SELECT DATE_FORMAT(payment_date, '%Y-%m') as month,
+             SUM(amount) as total, COUNT(*) as transactions
+      FROM collections
+      WHERE collected_by = ? AND payment_date >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH)
+      GROUP BY month ORDER BY month
+    `, [staffId]);
+
+    return res.json({
+      todayCollection, monthCollection, totalCollection, todayTransactions,
+      myCustomers, myActiveLoans, centerCount: myCenters.length,
+      myPendingAmount: myPending?.amount || 0,
+      myPendingCount: myPending?.cnt || 0,
+      myCenters, recentCollections, monthlyTrend,
+    });
+  } catch (err: any) {
+    console.error(err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 router.get('/agent-stats', authenticate, async (req: Request, res: Response) => {
   try {
     const today = new Date().toISOString().split('T')[0];
