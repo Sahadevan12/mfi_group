@@ -158,44 +158,61 @@ class XlsBuilder {
 
   fill(nc: number, s: any) { return Array(nc).fill(xc('', { fill: s.fill || {} })); }
 
-  /* ── Company header (navy band → gold line → title → period) ── */
+  /* ── Company header — matches Collection Sheet style ── */
   hdr(title: string, period: string) {
     const nc = this.ncols;
-    const navy = { patternType: 'solid', fgColor: { rgb: XL.NAVY } };
-    const gold = { patternType: 'solid', fgColor: { rgb: XL.GOLD } };
-    const w = (sz: number, bold = false) => ({ name: 'Arial', sz, bold, color: { rgb: XL.WHITE } });
+    const navyFill  = { patternType: 'solid', fgColor: { rgb: XL.NAVY } };
+    const goldFill  = { patternType: 'solid', fgColor: { rgb: 'FFF3CD' } };
+    const blueFill  = { patternType: 'solid', fgColor: { rgb: 'E8F0FE' } };
+    const whiteFill = { patternType: 'solid', fgColor: { rgb: XL.WHITE } };
+    const wh  = (sz: number, bold = false) => ({ name: 'Arial', sz, bold, color: { rgb: XL.WHITE } });
+    const nv  = (sz: number, bold = false) => ({ name: 'Arial', sz, bold, color: { rgb: XL.NAVY } });
+    const gy  = (sz: number) => ({ name: 'Arial', sz, color: { rgb: '555555' } });
     const ctr = { horizontal: 'center', vertical: 'center' };
+    const lft = { horizontal: 'left',   vertical: 'center' };
+    const rgt = { horizontal: 'right',  vertical: 'center' };
+    const thn = { style: 'thin', color: { rgb: 'CCCCCC' } };
+    const b   = { top: thn, bottom: thn, left: thn, right: thn };
 
-    // Row 0 — Company name
+    // Row 0 — Navy: SPS GROUP OF FOUNDATION
     const r0 = this.r;
-    this.row([xc(CO, { font: w(13, true), fill: navy, alignment: ctr }),
-      ...Array(nc - 1).fill(xc('', { fill: navy }))], 22);
+    this.row([
+      xc(CO, { font: wh(14, true), fill: navyFill, alignment: ctr }),
+      ...Array(nc - 1).fill(xc('', { fill: navyFill })),
+    ], 24);
     this.mrg(r0, 0, r0, nc - 1);
 
-    // Row 1 — Address + phone
+    // Row 1 — Gold: Address (left) | Generated date (right)
     const r1 = this.r;
-    this.row([xc(`${ADDR}  |  ${PH}`, { font: w(8), fill: navy, alignment: ctr }),
-      ...Array(nc - 1).fill(xc('', { fill: navy }))], 13);
-    this.mrg(r1, 0, r1, nc - 1);
+    this.row([
+      xc(ADDR, { font: gy(8), fill: goldFill, alignment: lft, border: b }),
+      ...Array(Math.max(nc - 2, 0)).fill(xc('', { fill: goldFill, border: b })),
+      xc(`Generated: ${ts()}`, { font: gy(8), fill: goldFill, alignment: rgt, border: b }),
+    ], 14);
+    if (nc > 2) this.mrg(r1, 0, r1, nc - 2);
 
-    // Row 2 — Gold separator
+    // Row 2 — Gold: Phone (left) | thin separator below
     const r2 = this.r;
-    this.row(Array(nc).fill(xc('', { fill: gold })), 4);
+    this.row([
+      xc(PH, { font: gy(8), fill: goldFill, alignment: lft, border: b }),
+      ...Array(nc - 1).fill(xc('', { fill: goldFill, border: b })),
+    ], 13);
     this.mrg(r2, 0, r2, nc - 1);
 
-    // Row 3 — Report title (left) + Generated (right)
+    // Row 3 — Blue: Report title (large, navy text)
     const r3 = this.r;
     this.row([
-      xc(title, { font: { name: 'Arial', sz: 13, bold: true, color: { rgb: XL.NAVY } }, alignment: { horizontal: 'left', vertical: 'center' } }),
-      ...Array(Math.max(nc - 2, 0)).fill(xc('', { font: { name: 'Arial', sz: 13 }, alignment: { horizontal: 'left', vertical: 'center' } })),
-      xc(`Generated: ${ts()}`, { font: { name: 'Arial', sz: 8, color: { rgb: 'AAAAAA' } }, alignment: { horizontal: 'right', vertical: 'center' } }),
-    ], 20);
-    if (nc > 2) this.mrg(r3, 0, r3, nc - 2);
+      xc(title, { font: nv(13, true), fill: blueFill, alignment: lft, border: { ...b, left: { style: 'medium', color: { rgb: XL.NAVY } } } }),
+      ...Array(nc - 1).fill(xc('', { fill: blueFill, border: b })),
+    ], 22);
+    this.mrg(r3, 0, r3, nc - 1);
 
-    // Row 4 — Period
+    // Row 4 — White: Period
     const r4 = this.r;
-    this.row([xc(period, { font: { name: 'Arial', sz: 9, color: { rgb: '555555' } }, alignment: { horizontal: 'left', vertical: 'center' } }),
-      ...Array(nc - 1).fill(xc('', { font: { name: 'Arial', sz: 9 } }))], 13);
+    this.row([
+      xc(period, { font: gy(9), fill: whiteFill, alignment: lft }),
+      ...Array(nc - 1).fill(xc('', { fill: whiteFill })),
+    ], 14);
     this.mrg(r4, 0, r4, nc - 1);
 
     this.gap();
@@ -934,79 +951,94 @@ export function exportCollectionSheet(opts: {
     navyHdr('S NO'), navyHdr('NOTE'), navyHdr('COUNT'), navyHdr('RUPEES'), navyHdr('CENTER LEADER SIGN'),
   ]);
 
-  // Data rows (member + denomination side-by-side, 10 rows)
-  for (let i = 0; i < 10; i++) {
-    const m = members[i];
-    const denom = DENOM[i];
-    const fill = i % 2 === 0 ? whiteFill : altFill;
+  // Data rows — left side: only actual members (S.NO only when member exists)
+  //             right side: all 10 denomination rows always
+  const totalRows = Math.max(members.length, DENOM.length);
+  for (let i = 0; i < totalRows; i++) {
+    const m        = i < members.length ? members[i] : null;
+    const denom    = i < DENOM.length   ? DENOM[i]   : null;
+    const fill     = i % 2 === 0 ? whiteFill : altFill;
     aoa.push([
-      dataCell(i + 1, fill, 'center'),
-      dataCell(m?.name || '', fill),
+      // Member side (A-G) — S.NO only when member exists
+      dataCell(m ? i + 1 : '', fill, 'center'),
+      dataCell(m?.name   || '', fill),
       dataCell(m ? String(m.mobile) : '', fill),
-      dataCell(m ? m.loan_amount : '', fill, 'right'),
-      dataCell(m ? m.emi_amount : '', fill, 'right'),
+      dataCell(m ? m.loan_amount  : '', fill, 'right'),
+      dataCell(m ? m.emi_amount   : '', fill, 'right'),
       dataCell(m?.installment_no || '', fill, 'center'),
       emptyCell(fill),
-      cell('', { fill: whiteFill }),  // gap column
-      dataCell(i + 1, fill, 'center'),
-      dataCell(denom.note, fill),
+      // Gap column H
+      cell('', { fill: whiteFill }),
+      // Denomination side (I-M)
+      dataCell(denom ? i + 1      : '', fill, 'center'),
+      dataCell(denom ? denom.note : '', fill),
       emptyCell(fill),
       emptyCell(fill),
       emptyCell(fill),
     ]);
   }
 
-  // TOTAL row
-  const totalEmi = members.reduce((s, m) => s + (Number(m?.emi_amount) || 0), 0);
+  // TOTAL row (position = 6 header rows + totalRows data rows)
+  const totalEmi  = members.reduce((s, m) => s + (Number(m?.emi_amount) || 0), 0);
+  const totalLoan = members.reduce((s, m) => s + (Number(m?.loan_amount) || 0), 0);
   aoa.push([
     cell('TOTAL', { font: { name: 'Arial', sz: 9, bold: true }, fill: totFill, border: brd }),
-    emptyCell(totFill), emptyCell(totFill), emptyCell(totFill),
-    cell(totalEmi || '', { font: { name: 'Arial', sz: 9, bold: true }, fill: totFill, alignment: { horizontal: 'right' }, border: brd }),
+    emptyCell(totFill), emptyCell(totFill),
+    cell(totalLoan || '', { font: { name: 'Arial', sz: 9, bold: true }, fill: totFill, alignment: { horizontal: 'right' }, border: brd }),
+    cell(totalEmi  || '', { font: { name: 'Arial', sz: 9, bold: true }, fill: totFill, alignment: { horizontal: 'right' }, border: brd }),
     emptyCell(totFill), emptyCell(totFill),
     cell('', { fill: whiteFill }),
     cell('TOTAL', { font: { name: 'Arial', sz: 9, bold: true }, fill: totFill, border: brd }),
     emptyCell(totFill), emptyCell(totFill), emptyCell(totFill), emptyCell(totFill),
   ]);
 
-  aoa.push(Array(13).fill(cell('', {})));
+  const emptyRow13 = () => Array(13).fill(cell('', {}));
+  aoa.push(emptyRow13());
 
   // TOTAL CASH row
   aoa.push([
-    cell('', {}), cell('', {}), cell('', {}), cell('', {}), cell('', {}), cell('', {}),
-    cell('TOTAL CASH :', { font: { name: 'Arial', sz: 10, bold: true, color: { rgb: nv } }, alignment: { horizontal: 'right' } }),
-    cell('', {}),
-    cell('', {}), cell('', {}), cell('', {}), cell('', {}), cell('', {}),
+    cell('TOTAL CASH :', { font: { name: 'Arial', sz: 10, bold: true, color: { rgb: nv } }, alignment: { horizontal: 'left' } }),
+    ...Array(12).fill(cell('', {})),
   ]);
 
-  aoa.push(Array(13).fill(cell('', {})));
+  aoa.push(emptyRow13());
 
   // BM SIGN row
   aoa.push([
-    cell('', {}), cell('', {}), cell('', {}), cell('', {}), cell('', {}), cell('', {}),
-    cell('BM SIGN :', { font: { name: 'Arial', sz: 10, bold: true, color: { rgb: nv } }, alignment: { horizontal: 'right' } }),
-    cell('', {}),
-    cell('', {}), cell('', {}), cell('', {}), cell('', {}), cell('', {}),
+    cell('BM SIGN :', { font: { name: 'Arial', sz: 10, bold: true, color: { rgb: nv } }, alignment: { horizontal: 'left' } }),
+    ...Array(12).fill(cell('', {})),
+  ]);
+
+  aoa.push(emptyRow13());
+
+  // CENTER LEADER SIGN row
+  aoa.push([
+    cell('CENTER LEADER SIGN :', { font: { name: 'Arial', sz: 10, bold: true, color: { rgb: nv } }, alignment: { horizontal: 'left' } }),
+    ...Array(12).fill(cell('', {})),
   ]);
 
   const ws = XS.utils.aoa_to_sheet(aoa);
 
-  // Column widths: A-G (member) | H (gap) | I-M (denom)
+  // Column A wide enough for "CENTER NAME :", "DAY ORDER :" etc.
   ws['!cols'] = [
-    { wch: 5 }, { wch: 24 }, { wch: 14 }, { wch: 13 }, { wch: 9 }, { wch: 10 }, { wch: 10 },
+    { wch: 14 }, { wch: 22 }, { wch: 14 }, { wch: 13 }, { wch: 9 }, { wch: 10 }, { wch: 10 },
     { wch: 1.5 },
-    { wch: 5 }, { wch: 12 }, { wch: 8 }, { wch: 10 }, { wch: 18 },
+    { wch: 5 }, { wch: 12 }, { wch: 8 }, { wch: 10 }, { wch: 20 },
   ];
 
-  ws['!rows'] = [{ hpt: 28 }, { hpt: 18 }, { hpt: 18 }, { hpt: 20 }, { hpt: 16 }, { hpt: 18 }];
+  ws['!rows'] = [{ hpt: 30 }, { hpt: 18 }, { hpt: 16 }, { hpt: 20 }, { hpt: 16 }, { hpt: 20 }];
 
+  const dataStart = 6; // rows 0-5 are headers
   ws['!merges'] = [
-    { s: { r: 0, c: 0 }, e: { r: 0, c: 12 } },          // Title
-    { s: { r: 1, c: 2 }, e: { r: 1, c: 9 } },            // Address
-    { s: { r: 2, c: 2 }, e: { r: 2, c: 9 } },            // Phone
-    { s: { r: 3, c: 2 }, e: { r: 3, c: 9 } },            // CENTER COLLECTION SHEET
-    { s: { r: 4, c: 2 }, e: { r: 4, c: 6 } },            // Period label
-    { s: { r: 4, c: 8 }, e: { r: 4, c: 12 } },           // DENOMINATION
-    { s: { r: 5 + 10 + 1, c: 6 }, e: { r: 5 + 10 + 1, c: 12 } }, // TOTAL CASH label merge
+    { s: { r: 0, c: 0 }, e: { r: 0, c: 12 } },           // Title (full width)
+    { s: { r: 1, c: 2 }, e: { r: 1, c: 9 } },             // Address (C-J)
+    { s: { r: 2, c: 2 }, e: { r: 2, c: 9 } },             // Phone (C-J)
+    { s: { r: 3, c: 2 }, e: { r: 3, c: 9 } },             // CENTER COLLECTION SHEET (C-J)
+    { s: { r: 4, c: 2 }, e: { r: 4, c: 6 } },             // Period label (C-G)
+    { s: { r: 4, c: 8 }, e: { r: 4, c: 12 } },            // DENOMINATION (I-M)
+    // TOTAL row: left side A-B merged, right side I-M merged
+    { s: { r: dataStart + totalRows, c: 0 }, e: { r: dataStart + totalRows, c: 2 } },
+    { s: { r: dataStart + totalRows, c: 8 }, e: { r: dataStart + totalRows, c: 12 } },
   ];
 
   const safeName = center.name.substring(0, 31).replace(/[[\]:*?/\\]/g, '_');
