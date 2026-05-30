@@ -5,6 +5,7 @@ import client from '../api/client';
 import { PageLoader } from '../components/ui/Spinner';
 import { Download, FileSpreadsheet, FileText } from 'lucide-react';
 import {
+  exportCollectionSheet,
   exportCenterCollectionSheet,
   exportDailyPDF, exportDailyExcel,
   exportWeeklyPDF, exportWeeklyExcel,
@@ -72,23 +73,31 @@ export default function Reports() {
   const [endDate, setEndDate] = useState(today);
   const [reportCenterId, setReportCenterId] = useState('');
   const [reportGroupId, setReportGroupId] = useState('');
+  // Per-tab center filters
+  const [dailyCenterId, setDailyCenterId]   = useState('');
+  const [weeklyCenterId, setWeeklyCenterId] = useState('');
+  const [monthlyCenterId, setMonthlyCenterId] = useState('');
 
   const dailyReport = useQuery({
-    queryKey: ['report-daily', date],
-    queryFn: () => client.get('/reports/daily-collection', { params: { date } }).then(r => r.data),
+    queryKey: ['report-daily', date, dailyCenterId],
+    queryFn: () => client.get('/reports/daily-collection', {
+      params: { date, ...(dailyCenterId ? { center_id: dailyCenterId } : {}) }
+    }).then(r => r.data),
     enabled: tab === 'daily',
   });
 
   const weeklyReport = useQuery({
-    queryKey: ['report-weekly', weekStart],
-    queryFn: () => client.get('/reports/weekly-collection', { params: { week_start: weekStart } }).then(r => r.data),
+    queryKey: ['report-weekly', weekStart, weeklyCenterId],
+    queryFn: () => client.get('/reports/weekly-collection', {
+      params: { week_start: weekStart, ...(weeklyCenterId ? { center_id: weeklyCenterId } : {}) }
+    }).then(r => r.data),
     enabled: tab === 'weekly',
   });
 
   const monthlyReport = useQuery({
-    queryKey: ['report-monthly', month],
+    queryKey: ['report-monthly', month, monthlyCenterId],
     queryFn: () => client.get('/reports/monthly-collection', {
-      params: { month: month.split('-')[1], year: month.split('-')[0] }
+      params: { month: month.split('-')[1], year: month.split('-')[0], ...(monthlyCenterId ? { center_id: monthlyCenterId } : {}) }
     }).then(r => r.data),
     enabled: tab === 'monthly',
   });
@@ -139,11 +148,7 @@ export default function Reports() {
     enabled: tab === 'cashbook',
   });
 
-  const centerSheetQuery = useQuery({
-    queryKey: ['center-collection-sheet', date],
-    queryFn: () => client.get('/reports/center-collection-sheet', { params: { date } }).then(r => r.data),
-    enabled: tab === 'daily',
-  });
+
 
   const { data: centersList } = useQuery({
     queryKey: ['centers'],
@@ -193,21 +198,42 @@ export default function Reports() {
       {/* Daily Report */}
       {tab === 'daily' && (
         <div className="space-y-4">
-          <div className="flex items-center justify-between flex-wrap gap-3">
-            <input type="date" className="input w-44" value={date} onChange={e => setDate(e.target.value)} />
+          <div className="flex items-end justify-between flex-wrap gap-3">
+            <div className="flex gap-3 flex-wrap items-end">
+              <div>
+                <label className="label">Date</label>
+                <input type="date" className="input w-44" value={date} onChange={e => setDate(e.target.value)} />
+              </div>
+              <div>
+                <label className="label">Center (Filter)</label>
+                <select className="input w-48" value={dailyCenterId} onChange={e => setDailyCenterId(e.target.value)}>
+                  <option value="">All Centers</option>
+                  {(centersList || []).map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </div>
+            </div>
             <div className="flex gap-2 flex-wrap justify-end">
               <ExportBar
                 onPDF={() => dailyReport.data && exportDailyPDF(dailyReport.data, date)}
                 onExcel={() => dailyReport.data && exportDailyExcel(dailyReport.data, date)}
               />
-              <button
-                className="btn-secondary text-xs py-1.5 px-3 bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100"
-                onClick={() => centerSheetQuery.data && exportCenterCollectionSheet(centerSheetQuery.data)}
-                disabled={!centerSheetQuery.data}
-                title="Download Center Collection Sheet in Excel format"
-              >
-                <FileSpreadsheet size={13} /> Center Collection Sheet
-              </button>
+              {dailyCenterId && dailyReport.data?.centerInfo && (
+                <button
+                  className="btn-secondary text-xs py-1.5 px-3 bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100"
+                  onClick={() => {
+                    const d = dailyReport.data;
+                    const [y, m, day] = date.split('-');
+                    exportCollectionSheet({
+                      periodLabel: 'DAILY',
+                      displayDate: `${day}/${m}/${y}`,
+                      center: d.centerInfo,
+                      members: d.members || [],
+                    });
+                  }}
+                >
+                  <FileSpreadsheet size={13} /> Collection Sheet
+                </button>
+              )}
             </div>
           </div>
           {dailyReport.isLoading ? <PageLoader /> : dailyReport.data && (
@@ -260,15 +286,45 @@ export default function Reports() {
       {/* Weekly Report */}
       {tab === 'weekly' && (
         <div className="space-y-4">
-          <div className="flex items-center justify-between flex-wrap gap-3">
-            <div>
-              <label className="label">Week Starting (Sunday)</label>
-              <input type="date" className="input w-44" value={weekStart} onChange={e => setWeekStart(e.target.value)} />
+          <div className="flex items-end justify-between flex-wrap gap-3">
+            <div className="flex gap-3 flex-wrap items-end">
+              <div>
+                <label className="label">Week Starting (Sunday)</label>
+                <input type="date" className="input w-44" value={weekStart} onChange={e => setWeekStart(e.target.value)} />
+              </div>
+              <div>
+                <label className="label">Center (Filter)</label>
+                <select className="input w-48" value={weeklyCenterId} onChange={e => setWeeklyCenterId(e.target.value)}>
+                  <option value="">All Centers</option>
+                  {(centersList || []).map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </div>
             </div>
-            <ExportBar
-              onPDF={() => weeklyReport.data && exportWeeklyPDF(weeklyReport.data)}
-              onExcel={() => weeklyReport.data && exportWeeklyExcel(weeklyReport.data)}
-            />
+            <div className="flex gap-2 flex-wrap justify-end">
+              <ExportBar
+                onPDF={() => weeklyReport.data && exportWeeklyPDF(weeklyReport.data)}
+                onExcel={() => weeklyReport.data && exportWeeklyExcel(weeklyReport.data)}
+              />
+              {weeklyCenterId && weeklyReport.data?.centerInfo && (
+                <button
+                  className="btn-secondary text-xs py-1.5 px-3 bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100"
+                  onClick={() => {
+                    const d = weeklyReport.data;
+                    const [fy,fm,fd] = (d.from||'').split('-');
+                    const [ty,tm,td] = (d.to||'').split('-');
+                    exportCollectionSheet({
+                      periodLabel: 'WEEKLY',
+                      displayDate: `${fd}/${fm}/${fy}`,
+                      dateRange: `${fd}/${fm}/${fy} - ${td}/${tm}/${ty}`,
+                      center: d.centerInfo,
+                      members: d.members || [],
+                    });
+                  }}
+                >
+                  <FileSpreadsheet size={13} /> Collection Sheet
+                </button>
+              )}
+            </div>
           </div>
           {weeklyReport.isLoading ? <PageLoader /> : weeklyReport.isError ? (
             <div className="card bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3">
@@ -334,12 +390,44 @@ export default function Reports() {
       {/* Monthly Report */}
       {tab === 'monthly' && (
         <div className="space-y-4">
-          <div className="flex items-center justify-between flex-wrap gap-3">
-            <input type="month" className="input w-44" value={month} onChange={e => setMonth(e.target.value)} />
-            <ExportBar
-              onPDF={() => monthlyReport.data && exportMonthlyPDF(monthlyReport.data)}
-              onExcel={() => monthlyReport.data && exportMonthlyExcel(monthlyReport.data)}
-            />
+          <div className="flex items-end justify-between flex-wrap gap-3">
+            <div className="flex gap-3 flex-wrap items-end">
+              <div>
+                <label className="label">Month</label>
+                <input type="month" className="input w-44" value={month} onChange={e => setMonth(e.target.value)} />
+              </div>
+              <div>
+                <label className="label">Center (Filter)</label>
+                <select className="input w-48" value={monthlyCenterId} onChange={e => setMonthlyCenterId(e.target.value)}>
+                  <option value="">All Centers</option>
+                  {(centersList || []).map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </div>
+            </div>
+            <div className="flex gap-2 flex-wrap justify-end">
+              <ExportBar
+                onPDF={() => monthlyReport.data && exportMonthlyPDF(monthlyReport.data)}
+                onExcel={() => monthlyReport.data && exportMonthlyExcel(monthlyReport.data)}
+              />
+              {monthlyCenterId && monthlyReport.data?.centerInfo && (
+                <button
+                  className="btn-secondary text-xs py-1.5 px-3 bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100"
+                  onClick={() => {
+                    const d = monthlyReport.data;
+                    const [y, m] = month.split('-');
+                    exportCollectionSheet({
+                      periodLabel: 'MONTHLY',
+                      displayDate: `01/${m}/${y}`,
+                      dateRange: `${month}`,
+                      center: d.centerInfo,
+                      members: d.members || [],
+                    });
+                  }}
+                >
+                  <FileSpreadsheet size={13} /> Collection Sheet
+                </button>
+              )}
+            </div>
           </div>
           {monthlyReport.isLoading ? <PageLoader /> : monthlyReport.data && (
             <>

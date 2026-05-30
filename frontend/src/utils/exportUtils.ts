@@ -825,6 +825,197 @@ export function exportCashbookExcel(data: any, from: string, to: string) {
 // ═══════════════════════════════════════════════════
 // CENTER COLLECTION SHEET (unchanged)
 // ═══════════════════════════════════════════════════
+// ─── SPS Center Collection Sheet (matches uploaded format exactly) ───────────
+// Layout: Member list (cols A-G) | Denomination sheet (cols I-M) side-by-side
+export function exportCollectionSheet(opts: {
+  periodLabel: 'DAILY' | 'WEEKLY' | 'MONTHLY';
+  displayDate: string;          // e.g. "26/5/2026"
+  dateRange?: string;           // e.g. "26/5/2026 - 01/6/2026"
+  center: { name: string; area?: string; meeting_day?: string; meeting_time?: string };
+  members: Array<{ name: string; mobile: string; loan_amount: number; emi_amount: number; installment_no?: number }>;
+}) {
+  const { periodLabel, displayDate, dateRange, center, members } = opts;
+
+  // ── style helpers ────────────────────────────────
+  const nv = '0F1E44';   // navy
+  const gd = 'D4AF37';   // gold
+  const wh = 'FFFFFF';
+  const gy = 'F0F4F8';   // alt row
+  const ft = 'E2E8F0';   // footer/total
+
+  const navyFill = { patternType: 'solid', fgColor: { rgb: nv } };
+  const whiteFill = { patternType: 'solid', fgColor: { rgb: wh } };
+  const altFill   = { patternType: 'solid', fgColor: { rgb: gy } };
+  const totFill   = { patternType: 'solid', fgColor: { rgb: ft } };
+  const goldFill  = { patternType: 'solid', fgColor: { rgb: 'FFF3CD' } };
+
+  const thinBrd = { style: 'thin', color: { rgb: 'CCCCCC' } };
+  const brd  = { top: thinBrd, bottom: thinBrd, left: thinBrd, right: thinBrd };
+  const nbrd = { top: { style: 'thin', color: { rgb: nv } }, bottom: { style: 'thin', color: { rgb: nv } }, left: { style: 'thin', color: { rgb: nv } }, right: { style: 'thin', color: { rgb: nv } } };
+
+  const cell = (v: any, extra: any = {}) => ({
+    v: v ?? '', t: typeof v === 'number' ? 'n' : 's', s: extra,
+  });
+
+  const navyHdr = (v: string, align: 'center'|'left'='center') => cell(v, {
+    font: { name: 'Arial', sz: 9, bold: true, color: { rgb: wh } },
+    fill: navyFill, alignment: { horizontal: align, vertical: 'center', wrapText: true },
+    border: nbrd,
+  });
+  const dataCell = (v: any, fillStyle: any, align: 'left'|'right'|'center' = 'left') => ({
+    v: v ?? '', t: typeof v === 'number' ? 'n' : 's',
+    s: { font: { name: 'Arial', sz: 9, color: { rgb: '1A1A1A' } }, fill: fillStyle,
+         alignment: { horizontal: align, vertical: 'center' }, border: brd },
+  });
+  const emptyCell = (fillStyle: any = whiteFill) => cell('', { fill: fillStyle, border: brd });
+
+  const DENOM = [
+    { note: '500*' }, { note: '200*' }, { note: '100*' }, { note: '50*' },
+    { note: '20*' },  { note: '10*' },  { note: '20 COIN*' }, { note: '10 COIN*' },
+    { note: '5 COIN*' }, { note: 'COINS' },
+  ];
+
+  const wb = XS.utils.book_new();
+  const aoa: any[][] = [];
+
+  // Row 0 (row 1): Title
+  aoa.push([
+    cell('SPS GROUP FOUNDATION', {
+      font: { name: 'Arial', sz: 16, bold: true, color: { rgb: wh } },
+      fill: navyFill, alignment: { horizontal: 'center', vertical: 'center' },
+    }),
+    ...Array(12).fill(cell('', { fill: navyFill })),
+  ]);
+
+  // Row 1 (row 2): Day Order | Address
+  aoa.push([
+    cell('DAY ORDER :', { font: { name: 'Arial', sz: 9, bold: true }, fill: goldFill, border: brd }),
+    cell(center.meeting_day || '', { font: { name: 'Arial', sz: 9, bold: true }, fill: goldFill, border: brd }),
+    cell(`28, Street, Kallamozhi, Udangudi, Tuticorin`, { font: { name: 'Arial', sz: 8 }, fill: goldFill, alignment: { horizontal: 'center' }, border: brd }),
+    ...Array(7).fill(cell('', { fill: goldFill, border: brd })),
+    cell('', { fill: goldFill }),
+    cell('', { fill: goldFill }),
+  ]);
+
+  // Row 2 (row 3): Phone | Date
+  aoa.push([
+    cell('', { fill: goldFill }),
+    cell('', { fill: goldFill }),
+    cell('PH: 04639-243023, CELL: 9788130671', { font: { name: 'Arial', sz: 8 }, fill: goldFill, alignment: { horizontal: 'center' }, border: brd }),
+    ...Array(7).fill(cell('', { fill: goldFill, border: brd })),
+    cell('DATE :', { font: { name: 'Arial', sz: 9, bold: true }, fill: goldFill, alignment: { horizontal: 'right' }, border: brd }),
+    cell(dateRange || displayDate, { font: { name: 'Arial', sz: 9, bold: true }, fill: goldFill, border: brd }),
+  ]);
+
+  // Row 3 (row 4): Center Name | CENTER COLLECTION SHEET | Center Time
+  aoa.push([
+    cell('CENTER NAME :', { font: { name: 'Arial', sz: 9, bold: true }, fill: { patternType: 'solid', fgColor: { rgb: 'E8F0FE' } }, border: brd }),
+    cell(center.name, { font: { name: 'Arial', sz: 9, bold: true, color: { rgb: nv } }, fill: { patternType: 'solid', fgColor: { rgb: 'E8F0FE' } }, border: brd }),
+    cell('CENTER COLLECTION SHEET', { font: { name: 'Arial', sz: 11, bold: true, color: { rgb: nv } }, fill: { patternType: 'solid', fgColor: { rgb: 'E8F0FE' } }, alignment: { horizontal: 'center', vertical: 'center' }, border: brd }),
+    ...Array(7).fill(cell('', { fill: { patternType: 'solid', fgColor: { rgb: 'E8F0FE' } }, border: brd })),
+    cell('CENTER TIME :', { font: { name: 'Arial', sz: 9, bold: true }, fill: { patternType: 'solid', fgColor: { rgb: 'E8F0FE' } }, alignment: { horizontal: 'right' }, border: brd }),
+    cell(center.meeting_time || '', { font: { name: 'Arial', sz: 9, bold: true }, fill: { patternType: 'solid', fgColor: { rgb: 'E8F0FE' } }, border: brd }),
+  ]);
+
+  // Row 4 (row 5): Period label | DENOMINATION label
+  aoa.push([
+    cell('', {}), cell('', {}),
+    cell(periodLabel, { font: { name: 'Arial', sz: 10, bold: true, color: { rgb: nv } }, alignment: { horizontal: 'center' } }),
+    cell('', {}), cell('', {}), cell('', {}), cell('', {}), cell('', {}),
+    cell('DENOMINATION', { font: { name: 'Arial', sz: 9, bold: true, color: { rgb: nv } }, alignment: { horizontal: 'center' } }),
+    cell('', {}), cell('', {}), cell('', {}), cell('', {}),
+  ]);
+
+  // Row 5 (row 6): Column Headers
+  aoa.push([
+    navyHdr('S NO'), navyHdr('MEMBER NAME'), navyHdr('MOBILE NUMBER'),
+    navyHdr('LOAN AMOUNT'), navyHdr('EMI'), navyHdr('PAID WEEK'), navyHdr('RM SIGN'),
+    cell('', { fill: whiteFill }),  // gap
+    navyHdr('S NO'), navyHdr('NOTE'), navyHdr('COUNT'), navyHdr('RUPEES'), navyHdr('CENTER LEADER SIGN'),
+  ]);
+
+  // Data rows (member + denomination side-by-side, 10 rows)
+  for (let i = 0; i < 10; i++) {
+    const m = members[i];
+    const denom = DENOM[i];
+    const fill = i % 2 === 0 ? whiteFill : altFill;
+    aoa.push([
+      dataCell(i + 1, fill, 'center'),
+      dataCell(m?.name || '', fill),
+      dataCell(m ? String(m.mobile) : '', fill),
+      dataCell(m ? m.loan_amount : '', fill, 'right'),
+      dataCell(m ? m.emi_amount : '', fill, 'right'),
+      dataCell(m?.installment_no || '', fill, 'center'),
+      emptyCell(fill),
+      cell('', { fill: whiteFill }),  // gap column
+      dataCell(i + 1, fill, 'center'),
+      dataCell(denom.note, fill),
+      emptyCell(fill),
+      emptyCell(fill),
+      emptyCell(fill),
+    ]);
+  }
+
+  // TOTAL row
+  const totalEmi = members.reduce((s, m) => s + (Number(m?.emi_amount) || 0), 0);
+  aoa.push([
+    cell('TOTAL', { font: { name: 'Arial', sz: 9, bold: true }, fill: totFill, border: brd }),
+    emptyCell(totFill), emptyCell(totFill), emptyCell(totFill),
+    cell(totalEmi || '', { font: { name: 'Arial', sz: 9, bold: true }, fill: totFill, alignment: { horizontal: 'right' }, border: brd }),
+    emptyCell(totFill), emptyCell(totFill),
+    cell('', { fill: whiteFill }),
+    cell('TOTAL', { font: { name: 'Arial', sz: 9, bold: true }, fill: totFill, border: brd }),
+    emptyCell(totFill), emptyCell(totFill), emptyCell(totFill), emptyCell(totFill),
+  ]);
+
+  aoa.push(Array(13).fill(cell('', {})));
+
+  // TOTAL CASH row
+  aoa.push([
+    cell('', {}), cell('', {}), cell('', {}), cell('', {}), cell('', {}), cell('', {}),
+    cell('TOTAL CASH :', { font: { name: 'Arial', sz: 10, bold: true, color: { rgb: nv } }, alignment: { horizontal: 'right' } }),
+    cell('', {}),
+    cell('', {}), cell('', {}), cell('', {}), cell('', {}), cell('', {}),
+  ]);
+
+  aoa.push(Array(13).fill(cell('', {})));
+
+  // BM SIGN row
+  aoa.push([
+    cell('', {}), cell('', {}), cell('', {}), cell('', {}), cell('', {}), cell('', {}),
+    cell('BM SIGN :', { font: { name: 'Arial', sz: 10, bold: true, color: { rgb: nv } }, alignment: { horizontal: 'right' } }),
+    cell('', {}),
+    cell('', {}), cell('', {}), cell('', {}), cell('', {}), cell('', {}),
+  ]);
+
+  const ws = XS.utils.aoa_to_sheet(aoa);
+
+  // Column widths: A-G (member) | H (gap) | I-M (denom)
+  ws['!cols'] = [
+    { wch: 5 }, { wch: 24 }, { wch: 14 }, { wch: 13 }, { wch: 9 }, { wch: 10 }, { wch: 10 },
+    { wch: 1.5 },
+    { wch: 5 }, { wch: 12 }, { wch: 8 }, { wch: 10 }, { wch: 18 },
+  ];
+
+  ws['!rows'] = [{ hpt: 28 }, { hpt: 18 }, { hpt: 18 }, { hpt: 20 }, { hpt: 16 }, { hpt: 18 }];
+
+  ws['!merges'] = [
+    { s: { r: 0, c: 0 }, e: { r: 0, c: 12 } },          // Title
+    { s: { r: 1, c: 2 }, e: { r: 1, c: 9 } },            // Address
+    { s: { r: 2, c: 2 }, e: { r: 2, c: 9 } },            // Phone
+    { s: { r: 3, c: 2 }, e: { r: 3, c: 9 } },            // CENTER COLLECTION SHEET
+    { s: { r: 4, c: 2 }, e: { r: 4, c: 6 } },            // Period label
+    { s: { r: 4, c: 8 }, e: { r: 4, c: 12 } },           // DENOMINATION
+    { s: { r: 5 + 10 + 1, c: 6 }, e: { r: 5 + 10 + 1, c: 12 } }, // TOTAL CASH label merge
+  ];
+
+  const safeName = center.name.substring(0, 31).replace(/[[\]:*?/\\]/g, '_');
+  XS.utils.book_append_sheet(wb, ws, safeName);
+
+  const filename = `Collection_Sheet_${center.name.replace(/\s+/g, '_')}_${displayDate.replace(/\//g, '-')}.xlsx`;
+  XS.writeFile(wb, filename);
+}
+
 export function exportCenterCollectionSheet(data: {
   date: string;
   centers: Array<{

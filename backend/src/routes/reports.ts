@@ -6,11 +6,13 @@ const router = Router();
 
 router.get('/daily-collection', authenticate, async (req: Request, res: Response) => {
   try {
-    const { date } = req.query;
+    const { date, center_id } = req.query;
     const targetDate = (date as string) || new Date().toISOString().split('T')[0];
     const isStaff = req.user!.role === 'staff';
     const sf = isStaff ? ' AND cu.center_id IN (SELECT id FROM centers WHERE staff_id = ? AND is_active = 1)' : '';
     const sp = isStaff ? [req.user!.id] : [];
+    const cf = center_id ? ' AND cu.center_id = ?' : '';
+    const cp = center_id ? [center_id] : [];
 
     const summary = await queryOne<any>(`
       SELECT COUNT(*) as total_transactions,
@@ -20,8 +22,8 @@ router.get('/daily-collection', authenticate, async (req: Request, res: Response
              COUNT(DISTINCT col.loan_id) as loans_paid
       FROM collections col
       JOIN customers cu ON col.customer_id = cu.id
-      WHERE col.payment_date = ? ${sf}
-    `, [targetDate, ...sp]);
+      WHERE col.payment_date = ? ${sf}${cf}
+    `, [targetDate, ...sp, ...cp]);
 
     const byAgent = await query<any>(`
       SELECT u.name as agent_name, COUNT(*) as transactions,
@@ -29,9 +31,9 @@ router.get('/daily-collection', authenticate, async (req: Request, res: Response
       FROM collections col
       JOIN users u ON col.collected_by = u.id
       JOIN customers cu ON col.customer_id = cu.id
-      WHERE col.payment_date = ? ${sf}
+      WHERE col.payment_date = ? ${sf}${cf}
       GROUP BY col.collected_by, u.name
-    `, [targetDate, ...sp]);
+    `, [targetDate, ...sp, ...cp]);
 
     const details = await query<any>(`
       SELECT col.receipt_no, col.amount, col.payment_mode, col.payment_type,
@@ -44,11 +46,33 @@ router.get('/daily-collection', authenticate, async (req: Request, res: Response
       JOIN users u ON col.collected_by = u.id
       LEFT JOIN centers ce ON cu.center_id = ce.id
       LEFT JOIN \`groups\` g ON cu.group_id = g.id
-      WHERE col.payment_date = ? ${sf}
+      WHERE col.payment_date = ? ${sf}${cf}
       ORDER BY col.created_at
-    `, [targetDate, ...sp]);
+    `, [targetDate, ...sp, ...cp]);
 
-    return res.json({ date: targetDate, summary, byAgent, details });
+    // Center info + member sheet data when center filter applied
+    let centerInfo = null;
+    let members: any[] = [];
+    if (center_id) {
+      centerInfo = await queryOne<any>(
+        'SELECT id, name, area, meeting_day, meeting_time FROM centers WHERE id = ?',
+        [center_id]
+      );
+      members = await query<any>(`
+        SELECT cu.name, cu.mobile,
+               l.amount as loan_amount, l.emi_amount,
+               (SELECT ls.installment_no FROM loan_schedule ls WHERE ls.loan_id = l.id
+                ORDER BY ABS(DATEDIFF(ls.due_date, ?)) LIMIT 1) as installment_no,
+               COALESCE((SELECT SUM(col2.amount) FROM collections col2
+                         WHERE col2.loan_id = l.id AND col2.payment_date = ?), 0) as paid_today
+        FROM customers cu
+        JOIN loans l ON l.customer_id = cu.id AND l.status = 'active'
+        WHERE cu.center_id = ? AND cu.is_active = 1
+        ORDER BY cu.name
+      `, [targetDate, targetDate, center_id]);
+    }
+
+    return res.json({ date: targetDate, summary, byAgent, details, centerInfo, members });
   } catch (err: any) {
     console.error(err);
     return res.status(500).json({ error: err.message });
@@ -57,7 +81,7 @@ router.get('/daily-collection', authenticate, async (req: Request, res: Response
 
 router.get('/weekly-collection', authenticate, async (req: Request, res: Response) => {
   try {
-    const { week_start } = req.query;
+    const { week_start, center_id } = req.query;
     let from: string;
     if (week_start) {
       from = week_start as string;
@@ -70,6 +94,8 @@ router.get('/weekly-collection', authenticate, async (req: Request, res: Respons
     const isStaff = req.user!.role === 'staff';
     const sf = isStaff ? ' AND cu.center_id IN (SELECT id FROM centers WHERE staff_id = ? AND is_active = 1)' : '';
     const sp = isStaff ? [req.user!.id] : [];
+    const cf = center_id ? ' AND cu.center_id = ?' : '';
+    const cp = center_id ? [center_id] : [];
 
     const summary = await queryOne<any>(`
       SELECT COUNT(*) as total_transactions,
@@ -78,25 +104,25 @@ router.get('/weekly-collection', authenticate, async (req: Request, res: Respons
              COUNT(DISTINCT col.customer_id) as customers_paid
       FROM collections col
       JOIN customers cu ON col.customer_id = cu.id
-      WHERE col.payment_date BETWEEN ? AND ? ${sf}
-    `, [from, to, ...sp]);
+      WHERE col.payment_date BETWEEN ? AND ? ${sf}${cf}
+    `, [from, to, ...sp, ...cp]);
 
     const daily = await query<any>(`
       SELECT col.payment_date, SUM(col.amount) as amount, COUNT(*) as transactions
       FROM collections col
       JOIN customers cu ON col.customer_id = cu.id
-      WHERE col.payment_date BETWEEN ? AND ? ${sf}
+      WHERE col.payment_date BETWEEN ? AND ? ${sf}${cf}
       GROUP BY col.payment_date ORDER BY col.payment_date
-    `, [from, to, ...sp]);
+    `, [from, to, ...sp, ...cp]);
 
     const byCenter = await query<any>(`
       SELECT ce.name as center_name, SUM(col.amount) as amount, COUNT(*) as transactions
       FROM collections col
       JOIN customers cu ON col.customer_id = cu.id
       LEFT JOIN centers ce ON cu.center_id = ce.id
-      WHERE col.payment_date BETWEEN ? AND ? ${sf}
+      WHERE col.payment_date BETWEEN ? AND ? ${sf}${cf}
       GROUP BY ce.id, ce.name ORDER BY amount DESC
-    `, [from, to, ...sp]);
+    `, [from, to, ...sp, ...cp]);
 
     const byGroup = await query<any>(`
       SELECT g.name as group_name, ce.name as center_name,
@@ -105,9 +131,9 @@ router.get('/weekly-collection', authenticate, async (req: Request, res: Respons
       JOIN customers cu ON col.customer_id = cu.id
       LEFT JOIN \`groups\` g ON cu.group_id = g.id
       LEFT JOIN centers ce ON cu.center_id = ce.id
-      WHERE col.payment_date BETWEEN ? AND ? ${sf}
+      WHERE col.payment_date BETWEEN ? AND ? ${sf}${cf}
       GROUP BY g.id, g.name, ce.name ORDER BY amount DESC
-    `, [from, to, ...sp]);
+    `, [from, to, ...sp, ...cp]);
 
     const details = await query<any>(`
       SELECT col.receipt_no, col.amount, col.payment_date, col.payment_mode, col.payment_type,
@@ -120,11 +146,31 @@ router.get('/weekly-collection', authenticate, async (req: Request, res: Respons
       JOIN users u ON col.collected_by = u.id
       LEFT JOIN centers ce ON cu.center_id = ce.id
       LEFT JOIN \`groups\` g ON cu.group_id = g.id
-      WHERE col.payment_date BETWEEN ? AND ? ${sf}
+      WHERE col.payment_date BETWEEN ? AND ? ${sf}${cf}
       ORDER BY col.payment_date, col.created_at
-    `, [from, to, ...sp]);
+    `, [from, to, ...sp, ...cp]);
 
-    return res.json({ from, to, summary, daily, byCenter, byGroup, details });
+    // Center info + member sheet data
+    let centerInfo = null;
+    let members: any[] = [];
+    if (center_id) {
+      centerInfo = await queryOne<any>(
+        'SELECT id, name, area, meeting_day, meeting_time FROM centers WHERE id = ?',
+        [center_id]
+      );
+      members = await query<any>(`
+        SELECT cu.name, cu.mobile,
+               l.amount as loan_amount, l.emi_amount,
+               (SELECT ls.installment_no FROM loan_schedule ls WHERE ls.loan_id = l.id
+                ORDER BY ABS(DATEDIFF(ls.due_date, ?)) LIMIT 1) as installment_no
+        FROM customers cu
+        JOIN loans l ON l.customer_id = cu.id AND l.status = 'active'
+        WHERE cu.center_id = ? AND cu.is_active = 1
+        ORDER BY cu.name
+      `, [from, center_id]);
+    }
+
+    return res.json({ from, to, summary, daily, byCenter, byGroup, details, centerInfo, members });
   } catch (err: any) {
     console.error(err);
     return res.status(500).json({ error: err.message });
@@ -133,41 +179,64 @@ router.get('/weekly-collection', authenticate, async (req: Request, res: Respons
 
 router.get('/monthly-collection', authenticate, async (req: Request, res: Response) => {
   try {
-    const { month, year } = req.query;
+    const { month, year, center_id } = req.query;
     const now = new Date();
     const m = String(month || now.getMonth() + 1).padStart(2, '0');
     const y = year || now.getFullYear();
     const monthStr = `${y}-${m}`;
+    const fromDate = `${monthStr}-01`;
     const isStaff = req.user!.role === 'staff';
     const sf = isStaff ? ' AND cu.center_id IN (SELECT id FROM centers WHERE staff_id = ? AND is_active = 1)' : '';
     const sp = isStaff ? [req.user!.id] : [];
+    const cf = center_id ? ' AND cu.center_id = ?' : '';
+    const cp = center_id ? [center_id] : [];
 
     const summary = await queryOne<any>(`
       SELECT SUM(col.amount) as total_amount, COUNT(*) as transactions,
              COUNT(DISTINCT col.customer_id) as unique_customers
       FROM collections col
       JOIN customers cu ON col.customer_id = cu.id
-      WHERE DATE_FORMAT(col.payment_date, '%Y-%m') = ? ${sf}
-    `, [monthStr, ...sp]);
+      WHERE DATE_FORMAT(col.payment_date, '%Y-%m') = ? ${sf}${cf}
+    `, [monthStr, ...sp, ...cp]);
 
     const daily = await query<any>(`
       SELECT col.payment_date, SUM(col.amount) as amount, COUNT(*) as transactions
       FROM collections col
       JOIN customers cu ON col.customer_id = cu.id
-      WHERE DATE_FORMAT(col.payment_date, '%Y-%m') = ? ${sf}
+      WHERE DATE_FORMAT(col.payment_date, '%Y-%m') = ? ${sf}${cf}
       GROUP BY col.payment_date ORDER BY col.payment_date
-    `, [monthStr, ...sp]);
+    `, [monthStr, ...sp, ...cp]);
 
     const byCenter = await query<any>(`
       SELECT ce.name as center_name, SUM(col.amount) as amount, COUNT(*) as transactions
       FROM collections col
       JOIN customers cu ON col.customer_id = cu.id
       LEFT JOIN centers ce ON cu.center_id = ce.id
-      WHERE DATE_FORMAT(col.payment_date, '%Y-%m') = ? ${sf}
+      WHERE DATE_FORMAT(col.payment_date, '%Y-%m') = ? ${sf}${cf}
       GROUP BY ce.id, ce.name ORDER BY amount DESC
-    `, [monthStr, ...sp]);
+    `, [monthStr, ...sp, ...cp]);
 
-    return res.json({ month: monthStr, summary, daily, byCenter });
+    // Center info + member sheet data
+    let centerInfo = null;
+    let members: any[] = [];
+    if (center_id) {
+      centerInfo = await queryOne<any>(
+        'SELECT id, name, area, meeting_day, meeting_time FROM centers WHERE id = ?',
+        [center_id]
+      );
+      members = await query<any>(`
+        SELECT cu.name, cu.mobile,
+               l.amount as loan_amount, l.emi_amount,
+               (SELECT ls.installment_no FROM loan_schedule ls WHERE ls.loan_id = l.id
+                ORDER BY ABS(DATEDIFF(ls.due_date, ?)) LIMIT 1) as installment_no
+        FROM customers cu
+        JOIN loans l ON l.customer_id = cu.id AND l.status = 'active'
+        WHERE cu.center_id = ? AND cu.is_active = 1
+        ORDER BY cu.name
+      `, [fromDate, center_id]);
+    }
+
+    return res.json({ month: monthStr, summary, daily, byCenter, centerInfo, members });
   } catch (err: any) {
     console.error(err);
     return res.status(500).json({ error: err.message });
